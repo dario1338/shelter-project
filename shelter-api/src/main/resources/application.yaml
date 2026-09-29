@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: shelter-api
+  datasource:
+    url: jdbc:postgresql://localhost:5433/shelter_database
+    username: postgres
+    password: postgres
