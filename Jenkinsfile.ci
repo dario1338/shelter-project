@@ -23,5 +23,13 @@ pipeline {
                 }
             }
         }
+
+        stage('Backend: Integration Tests') {
+            steps {
+                dir('shelter-api') {
+                    sh './mvnw test -Dtest=*IntegrationTest'
+                }
+            }
+        }
     }
 }
