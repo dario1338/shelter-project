@@ -23,5 +23,15 @@ pipeline {
                 }
             }
         }
+
+        stage('Backend: Integration Tests') {
+            steps {
+                dir('shelter-api') {
+                    withEnv(['TESTCONTAINERS_RYUK_DISABLED=true']) {
+                        sh './mvnw test -Dtest=*IntegrationTest'
+                    }
+                }
+            }
+        }
     }
 }
