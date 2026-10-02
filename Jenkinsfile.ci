@@ -15,5 +15,13 @@ pipeline {
                 }
             }
         }
+
+        stage('Backend: Unit Tests') {
+            steps {
+                dir('shelter-api') {
+                    sh './mvnw test'
+                }
+            }
+        }
     }
 }
