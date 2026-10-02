@@ -27,7 +27,9 @@ pipeline {
         stage('Backend: Integration Tests') {
             steps {
                 dir('shelter-api') {
-                    sh './mvnw test -Dtest=*IntegrationTest'
+                    withEnv(['TESTCONTAINERS_RYUK_DISABLED=true']) {
+                        sh './mvnw test -Dtest=*IntegrationTest'
+                    }
                 }
             }
         }
