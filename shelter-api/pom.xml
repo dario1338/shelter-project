@@ -28,6 +28,8 @@
     </scm>
     <properties>
         <java.version>21</java.version>
+        <sonar.projectKey>shelter-api</sonar.projectKey>
+        <sonar.host.url>http://sonarqube:9000</sonar.host.url>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -130,6 +132,11 @@
                         <exclude>**/ShelterApiApplicationTests.java</exclude>
                     </excludes>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>5.0.0.4389</version>
             </plugin>
         </plugins>
     </build>
