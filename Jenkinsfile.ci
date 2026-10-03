@@ -67,6 +67,7 @@ pipeline {
                 dir('shelter-api') {
                     script {
                         def imageTag = "dario1338/shelter-api:${env.GIT_COMMIT.take(7)}"
+                        sh "docker rmi -f ${imageTag} || true"
                         sh "docker build -t ${imageTag} ."
 
                         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
