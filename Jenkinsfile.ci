@@ -61,6 +61,23 @@ pipeline {
                 }
             }
         }
+
+        stage('Docker: Build & Push') {
+            steps {
+                dir('shelter-api') {
+                    script {
+                        def imageTag = "dario1338/shelter-api:${env.GIT_COMMIT.take(7)}"
+                        sh "docker rmi -f ${imageTag} || true"
+                        sh "docker build -t ${imageTag} ."
+
+                        withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                            sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                            sh "docker push ${imageTag}"
+                        }
+                    }
+                }
+            }
+        }
         
     }
 }
