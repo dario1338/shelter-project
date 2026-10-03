@@ -24,6 +24,16 @@ pipeline {
             }
         }
 
+        stage('Backend: SonarQube Analysis') {
+            steps {
+                dir('shelter-api') {
+                    withSonarQubeEnv('sonar-server') {
+                        sh './mvnw sonar:sonar'
+                    }
+                }
+            }
+        }
+
         stage('Backend: Integration Tests') {
             steps {
                 dir('shelter-api') {
