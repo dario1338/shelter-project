@@ -8,6 +8,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import static org.hamcrest.Matchers.notNullValue;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
@@ -42,5 +43,15 @@ class HealthControllerAcceptanceTest {
                 .then()
                 .statusCode(200)
                 .body("status", equalTo("OK"));
+    }
+
+    @Test
+    void userChecksBuildInfoAndReceivesRevision() {
+        given()
+                .when()
+                .get("/api/info")
+                .then()
+                .statusCode(200)
+                .body("revision", notNullValue());
     }
 }
