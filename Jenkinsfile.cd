@@ -1,0 +1,98 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'GIT_COMMIT_FULL', defaultValue: '',
+               description: 'Full commit hash (40 characters) of the image to deliver')
+    }
+
+    options {
+        disableConcurrentBuilds()
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
+    environment {
+        RENDER_API  = 'https://api.render.com/v1'
+        IMAGE_REPO  = 'docker.io/dario1338/shelter-api'
+        STAGING_ID  = 'srv-db0j781srm7s73fr95c0'
+        STAGING_URL = 'https://shelter-api-staging.onrender.com'
+    }
+
+    stages {
+        stage('Validate parameters') {
+            steps {
+                script {
+                    if (!(params.GIT_COMMIT_FULL ==~ /^[0-9a-f]{40}$/)) {
+                        error "GIT_COMMIT_FULL must be a full 40-character hash, got: '${params.GIT_COMMIT_FULL}'"
+                    }
+                    env.IMAGE_URL = "${env.IMAGE_REPO}:${params.GIT_COMMIT_FULL.take(7)}"
+                    echo "Delivering image ${env.IMAGE_URL}"
+                }
+            }
+        }
+
+        stage('Staging: deploy') {
+            steps {
+                withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
+                    script {
+                        def deployId = deployImage(env.STAGING_ID, env.IMAGE_URL)
+                        waitForDeploy(env.STAGING_ID, deployId)
+                    }
+                }
+            }
+        }
+
+        stage('Staging: verify revision') {
+            steps {
+                script {
+                    verifyRevision(env.STAGING_URL, params.GIT_COMMIT_FULL)
+                }
+            }
+        }
+    }
+}
+
+def deployImage(String serviceId, String imageUrl) {
+    def out = sh(returnStdout: true, script: """
+        curl -sS -f -X POST "${env.RENDER_API}/services/${serviceId}/deploys" \
+          -H "Authorization: Bearer \$RENDER_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{"imageUrl": "${imageUrl}"}'
+    """).trim()
+    def deployId = readJSON(text: out).id
+    echo "Deploy ${deployId} started for service ${serviceId}"
+    return deployId
+}
+
+def waitForDeploy(String serviceId, String deployId) {
+    timeout(time: 15, unit: 'MINUTES') {
+        waitUntil(initialRecurrencePeriod: 10000) {
+            def out = sh(returnStdout: true, script: """
+                curl -sS -f "${env.RENDER_API}/services/${serviceId}/deploys/${deployId}" \
+                  -H "Authorization: Bearer \$RENDER_KEY"
+            """).trim()
+            def status = readJSON(text: out).status
+            echo "Deploy ${deployId}: ${status}"
+            if (status in ['build_failed', 'update_failed', 'pre_deploy_failed', 'canceled', 'deactivated']) {
+                error "Deploy ${deployId} failed with status: ${status}"
+            }
+            return status == 'live'
+        }
+    }
+}
+
+def verifyRevision(String baseUrl, String expected) {
+    timeout(time: 10, unit: 'MINUTES') {
+        waitUntil(initialRecurrencePeriod: 10000) {
+            def code = sh(returnStatus: true,
+                          script: "curl -sS -f --max-time 30 '${baseUrl}/api/info' -o info.json")
+            if (code != 0) {
+                echo "Service not responding yet (curl exit code ${code}), retrying"
+                return false
+            }
+            def revision = readJSON(file: 'info.json').revision
+            echo "Reported revision: ${revision}, expected: ${expected}"
+            return revision == expected
+        }
+    }
+}
