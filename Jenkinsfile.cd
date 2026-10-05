@@ -22,10 +22,12 @@ pipeline {
         stage('Validate parameters') {
             steps {
                 script {
-                    if (!(params.GIT_COMMIT_FULL ==~ /^[0-9a-f]{40}$/)) {
-                        error "GIT_COMMIT_FULL must be a full 40-character hash, got: '${params.GIT_COMMIT_FULL}'"
+                    def commit = params.GIT_COMMIT_FULL.trim()
+                    if (!(commit ==~ /^[0-9a-f]{40}$/)) {
+                        error "GIT_COMMIT_FULL must be a full 40-character hash, got: '${commit}'"
                     }
-                    env.IMAGE_URL = "${env.IMAGE_REPO}:${params.GIT_COMMIT_FULL.take(7)}"
+                    env.COMMIT_FULL = commit
+                    env.IMAGE_URL = "${env.IMAGE_REPO}:${commit.take(7)}"
                     echo "Delivering image ${env.IMAGE_URL}"
                 }
             }
@@ -45,7 +47,7 @@ pipeline {
         stage('Staging: verify revision') {
             steps {
                 script {
-                    verifyRevision(env.STAGING_URL, params.GIT_COMMIT_FULL)
+                    verifyRevision(env.STAGING_URL, env.COMMIT_FULL)
                 }
             }
         }
