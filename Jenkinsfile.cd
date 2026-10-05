@@ -55,13 +55,18 @@ pipeline {
 }
 
 def deployImage(String serviceId, String imageUrl) {
-    def out = sh(returnStdout: true, script: """
-        curl -sS -f -X POST "${env.RENDER_API}/services/${serviceId}/deploys" \
+    def code = sh(returnStdout: true, script: """
+        curl -sS -o deploy-response.json -w '%{http_code}' \
+          -X POST "${env.RENDER_API}/services/${serviceId}/deploys" \
           -H "Authorization: Bearer \$RENDER_KEY" \
           -H "Content-Type: application/json" \
           -d '{"imageUrl": "${imageUrl}"}'
     """).trim()
-    def deployId = readJSON(text: out).id
+    def body = readFile('deploy-response.json')
+    if (!(code ==~ /2\d\d/)) {
+        error "Render rejected the deploy request (HTTP ${code}): ${body}"
+    }
+    def deployId = readJSON(text: body).id
     echo "Deploy ${deployId} started for service ${serviceId}"
     return deployId
 }
