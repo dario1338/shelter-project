@@ -62,7 +62,7 @@ pipeline {
             }
         }
 
-        stage('Docker: Build (provjera)') {
+        stage('Docker: Build (verification)') {
             when { not { branch 'main' } }
             steps {
                 dir('shelter-api') {
@@ -93,6 +93,41 @@ pipeline {
                 }
             }
         }
-        
+
+        stage('Proxy: Build & verify config') {
+            when { not { branch 'main' } }
+            steps {
+                dir('shelter-proxy') {
+                    script {
+                        def checkTag = "shelter-proxy:check-${env.GIT_COMMIT.take(7)}"
+                        sh "docker rmi -f ${checkTag} || true"
+                        try {
+                            sh "docker build -t ${checkTag} ."
+                            sh "docker run --rm -e API_UPSTREAM=example.com -e UI_UPSTREAM=example.com ${checkTag} nginx -t"
+                        } finally {
+                            sh "docker rmi -f ${checkTag} || true"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Proxy: Build & Push') {
+            when { branch 'main' }
+            steps {
+                dir('shelter-proxy') {
+                    script {
+                        def imageTag = "dario1338/shelter-proxy:${env.GIT_COMMIT.take(7)}"
+                        sh "docker rmi -f ${imageTag} || true"
+                        sh "docker buildx build --platform linux/amd64 -t ${imageTag} --load ."
+
+                        withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                            sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                            sh "docker push ${imageTag}"
+                        }
+                    }
+                }
+            }
+        }
     }
 }
