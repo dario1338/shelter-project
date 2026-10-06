@@ -31,6 +31,7 @@
         <sonar.projectKey>shelter-api</sonar.projectKey>
         <sonar.host.url>http://sonarqube:9000</sonar.host.url>
         <git.revision>unknown</git.revision>
+        <excludedGroups>smoke</excludedGroups>
     </properties>
     <dependencyManagement>
         <dependencies>

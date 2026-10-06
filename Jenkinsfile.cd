@@ -51,6 +51,14 @@ pipeline {
                 }
             }
         }
+
+        stage('Staging: smoke tests') {
+            steps {
+                dir('shelter-api') {
+                    sh "./mvnw test -Dtest=StagingSmokeTest -DexcludedGroups=never -Dstaging.url=${env.STAGING_URL} -Dstaging.expectedRevision=${env.COMMIT_FULL}"
+                }
+            }
+        }
     }
 }
 
