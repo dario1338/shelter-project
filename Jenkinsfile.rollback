@@ -1,0 +1,132 @@
+def render
+
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'TARGET_TAG', defaultValue: '',
+               description: 'OPTIONAL: 7-character image tag from Docker Hub to roll back to. Leave empty to switch back to the version the idle instance currently holds (fast path).')
+    }
+
+    options {
+        disableConcurrentBuilds()
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Load helpers') {
+            steps {
+                checkout scm
+                script {
+                    render = load 'jenkins/render.groovy'
+                    render.init()
+                }
+            }
+        }
+
+        stage('Inspect production') {
+            steps {
+                script {
+                    def tag = (params.TARGET_TAG ?: '').trim()
+                    if (tag && !(tag ==~ /^[0-9a-f]{7}$/)) {
+                        error "TARGET_TAG must be a 7-character lowercase hex tag, got: '${tag}'"
+                    }
+                    env.TARGET_TAG_CLEAN = tag
+
+                    render.resolveInstances()
+
+                    // Free-tier instances sleep, and requests that only pass through the proxy did not wake them
+                    // (observed). Requests made directly to an instance do. A rollback must also work when
+                    // production is broken, so an unhealthy active instance is reported, not fatal.
+                    def activeUp = render.probeHealthy("https://${env.ACTIVE_HOST}", 5)
+                    if (activeUp) {
+                        env.ACTIVE_REVISION = render.fetchRevision("https://${env.ACTIVE_HOST}") ?: 'unknown'
+                    } else {
+                        env.ACTIVE_REVISION = 'unreachable'
+                        echo "WARNING: the active instance ${env.ACTIVE_HOST} is not answering. Treating this as an emergency rollback."
+                    }
+                    echo "Production (${env.ACTIVE_HOST}) revision: ${env.ACTIVE_REVISION}"
+
+                    if (tag) {
+                        if (env.ACTIVE_REVISION.startsWith(tag)) {
+                            error "Production already runs ${tag}, nothing to roll back"
+                        }
+                        env.TARGET_DESCRIPTION = "image ${tag}, which will first be deployed to the idle instance ${env.IDLE_HOST}"
+                    } else {
+                        // Also wakes up the idle instance, so that the switch itself is fast.
+                        render.waitHealthy("https://${env.IDLE_HOST}")
+                        def idleRevision = render.fetchRevision("https://${env.IDLE_HOST}")
+                        if (idleRevision && idleRevision == env.ACTIVE_REVISION) {
+                            error "The idle instance runs the same revision as production (${idleRevision}), nothing to roll back to. Use TARGET_TAG to pick an older image."
+                        }
+                        env.TARGET_DESCRIPTION = "the version held by the idle instance ${env.IDLE_HOST} (revision ${idleRevision ?: 'unknown'})"
+                    }
+                    echo "Rollback target: ${env.TARGET_DESCRIPTION}"
+                }
+            }
+        }
+
+        stage('Approval') {
+            steps {
+                script {
+                    def shown = env.ACTIVE_REVISION.length() == 40 ? env.ACTIVE_REVISION.take(7) : env.ACTIVE_REVISION
+                    timeout(time: 30, unit: 'MINUTES') {
+                        input message: "Roll back production from ${shown} (${env.ACTIVE_HOST}) to ${env.TARGET_DESCRIPTION}?",
+                              ok: 'Roll back'
+                    }
+                }
+            }
+        }
+
+        stage('Execute rollback') {
+            options {
+                lock('shelter-production')
+            }
+            steps {
+                withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
+                    script {
+                        // Traffic may have been switched while the approval was pending.
+                        def activeAtApproval = env.ACTIVE_HOST
+                        render.resolveInstances()
+                        if (env.ACTIVE_HOST != activeAtApproval) {
+                            error "Production traffic moved from ${activeAtApproval} to ${env.ACTIVE_HOST} while waiting for approval. Aborting, please inspect and run again."
+                        }
+
+                        def tag = env.TARGET_TAG_CLEAN
+                        if (tag) {
+                            def deployId = render.deployImage(env.IDLE_ID, "${env.IMAGE_REPO}:${tag}")
+                            render.waitForDeploy(env.IDLE_ID, deployId)
+                        }
+
+                        // Verify the target BEFORE it receives traffic (directly, which also wakes it up).
+                        render.waitHealthy("https://${env.IDLE_HOST}")
+                        def revision = render.fetchRevision("https://${env.IDLE_HOST}")
+                        if (tag && revision && !revision.startsWith(tag)) {
+                            error "Idle instance reports revision ${revision}, expected an image tagged ${tag}"
+                        }
+                        if (!revision) {
+                            echo 'WARNING: the target version does not report a revision (no /api/info). Only health and routing will be verified.'
+                        }
+
+                        try {
+                            render.setUpstream(env.IDLE_HOST)
+                            render.verifyServedBy(env.IDLE_HOST)
+                            if (revision) {
+                                render.verifyThroughProxy(env.IDLE_HOST, revision)
+                                dir('shelter-api') {
+                                    sh "./mvnw test -Dtest=StagingSmokeTest -DexcludedGroups=never -Dstaging.url=${env.PROXY_URL} -Dstaging.expectedRevision=${revision}"
+                                }
+                            }
+                        } catch (e) {
+                            echo "Verification after the rollback failed (${e.getMessage()}). Restoring ${env.ACTIVE_HOST}"
+                            render.setUpstream(env.ACTIVE_HOST)
+                            render.verifyServedBy(env.ACTIVE_HOST)
+                            error "Rollback failed and traffic was restored to ${env.ACTIVE_HOST}: ${e.getMessage()}"
+                        }
+                        echo "Production now runs ${revision ?: 'an older version'} on ${env.IDLE_HOST}"
+                    }
+                }
+            }
+        }
+    }
+}
