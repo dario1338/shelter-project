@@ -34,6 +34,8 @@ pipeline {
                     env.TARGET_TAG_CLEAN = tag
 
                     render.resolveInstances()
+                    // The proxy and the active instance may be asleep (free tier). Wait until production really answers.
+                    render.waitHealthy(env.PROXY_URL)
                     env.ACTIVE_REVISION = render.fetchRevision(env.PROXY_URL) ?: 'unknown'
                     echo "Production currently runs revision ${env.ACTIVE_REVISION} on ${env.ACTIVE_HOST}"
 
