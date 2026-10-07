@@ -129,5 +129,16 @@ pipeline {
                 }
             }
         }
+
+        // Continuous Delivery: hand the freshly published image over to the delivery pipeline.
+        // wait: false, so this build does not hold an executor while shelter-cd waits for the approval.
+        stage('Trigger delivery') {
+            when { branch 'main' }
+            steps {
+                build job: '/shelter-cd',
+                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT)],
+                      wait: false
+            }
+        }
     }
 }
