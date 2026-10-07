@@ -68,6 +68,21 @@ def waitHealthy(String baseUrl) {
     }
 }
 
+// Probes /api/health directly on a service, waking it up if it sleeps (a cold start takes about 95 seconds).
+// Returns true/false and never fails the build, so it can be used where an unhealthy service is a valid state.
+def probeHealthy(String baseUrl, int maxAttempts) {
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+        def code = sh(returnStatus: true,
+                      script: "curl -sS -f --max-time 60 '${baseUrl}/api/health' -o /dev/null")
+        if (code == 0) {
+            return true
+        }
+        echo "${baseUrl} not healthy yet (curl exit code ${code}), attempt ${attempt} of ${maxAttempts}"
+        sleep 10
+    }
+    return false
+}
+
 // Returns the full commit hash the service reports.
 // Returns '' only when the service clearly answers WITHOUT a usable revision:
 //   - 401/403/404: a version older than /api/info (anonymous requests to unknown paths are denied)

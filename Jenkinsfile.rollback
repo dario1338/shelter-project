@@ -34,10 +34,18 @@ pipeline {
                     env.TARGET_TAG_CLEAN = tag
 
                     render.resolveInstances()
-                    // The proxy and the active instance may be asleep (free tier). Wait until production really answers.
-                    render.waitHealthy(env.PROXY_URL)
-                    env.ACTIVE_REVISION = render.fetchRevision(env.PROXY_URL) ?: 'unknown'
-                    echo "Production currently runs revision ${env.ACTIVE_REVISION} on ${env.ACTIVE_HOST}"
+
+                    // Free-tier instances sleep, and requests that only pass through the proxy did not wake them
+                    // (observed). Requests made directly to an instance do. A rollback must also work when
+                    // production is broken, so an unhealthy active instance is reported, not fatal.
+                    def activeUp = render.probeHealthy("https://${env.ACTIVE_HOST}", 5)
+                    if (activeUp) {
+                        env.ACTIVE_REVISION = render.fetchRevision("https://${env.ACTIVE_HOST}") ?: 'unknown'
+                    } else {
+                        env.ACTIVE_REVISION = 'unreachable'
+                        echo "WARNING: the active instance ${env.ACTIVE_HOST} is not answering. Treating this as an emergency rollback."
+                    }
+                    echo "Production (${env.ACTIVE_HOST}) revision: ${env.ACTIVE_REVISION}"
 
                     if (tag) {
                         if (env.ACTIVE_REVISION.startsWith(tag)) {
@@ -60,9 +68,12 @@ pipeline {
 
         stage('Approval') {
             steps {
-                timeout(time: 30, unit: 'MINUTES') {
-                    input message: "Roll back production from ${env.ACTIVE_REVISION.take(7)} (${env.ACTIVE_HOST}) to ${env.TARGET_DESCRIPTION}?",
-                          ok: 'Roll back'
+                script {
+                    def shown = env.ACTIVE_REVISION.length() == 40 ? env.ACTIVE_REVISION.take(7) : env.ACTIVE_REVISION
+                    timeout(time: 30, unit: 'MINUTES') {
+                        input message: "Roll back production from ${shown} (${env.ACTIVE_HOST}) to ${env.TARGET_DESCRIPTION}?",
+                              ok: 'Roll back'
+                    }
                 }
             }
         }
@@ -87,7 +98,7 @@ pipeline {
                             render.waitForDeploy(env.IDLE_ID, deployId)
                         }
 
-                        // Verify the target BEFORE it receives traffic.
+                        // Verify the target BEFORE it receives traffic (directly, which also wakes it up).
                         render.waitHealthy("https://${env.IDLE_HOST}")
                         def revision = render.fetchRevision("https://${env.IDLE_HOST}")
                         if (tag && revision && !revision.startsWith(tag)) {
