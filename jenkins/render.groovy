@@ -68,16 +68,28 @@ def waitHealthy(String baseUrl) {
     }
 }
 
-// Returns the full commit hash the service reports, or '' if /api/info is unavailable
-// (versions older than the info endpoint) or the revision is unknown.
+// Returns the full commit hash the service reports.
+// Returns '' only when the service clearly answers WITHOUT a usable revision:
+//   - 401/403/404: a version older than /api/info (anonymous requests to unknown paths are denied)
+//   - the revision is 'unknown'
+// Any other outcome (timeout, 5xx, sleeping instance) is retried and then fails the build,
+// so a transient error is never mistaken for "no revision".
 def fetchRevision(String baseUrl) {
-    def code = sh(returnStatus: true,
-                  script: "curl -sS -f --max-time 60 '${baseUrl}/api/info' -o info-probe.json")
-    if (code != 0) {
-        return ''
+    for (int attempt = 1; attempt <= 6; attempt++) {
+        def code = sh(returnStdout: true, script: """
+            curl -sS -o info-probe.json -w '%{http_code}' --max-time 60 '${baseUrl}/api/info' || true
+        """).trim()
+        if (code in ['401', '403', '404']) {
+            return ''
+        }
+        if (code ==~ /2\d\d/) {
+            def revision = readJSON(file: 'info-probe.json').revision
+            return (revision && revision != 'unknown') ? revision : ''
+        }
+        echo "Could not read the revision from ${baseUrl} (HTTP ${code}), attempt ${attempt} of 6"
+        sleep 15
     }
-    def revision = readJSON(file: 'info-probe.json').revision
-    return (revision && revision != 'unknown') ? revision : ''
+    error "Could not determine the revision of ${baseUrl}: the service did not answer correctly"
 }
 
 def verifyRevision(String baseUrl, String expected) {
