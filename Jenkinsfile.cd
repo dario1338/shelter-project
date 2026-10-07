@@ -1,3 +1,5 @@
+def render
+
 pipeline {
     agent any
 
@@ -5,7 +7,7 @@ pipeline {
         string(name: 'GIT_COMMIT_FULL', defaultValue: '',
                description: 'Full commit hash (40 characters) of the image to deliver')
         booleanParam(name: 'TEST_ROLLBACK', defaultValue: false,
-               description: 'TEST ONLY: fail the verification right after the traffic switch, to demonstrate the rollback')
+               description: 'TEST ONLY: fail the verification right after the traffic switch, to demonstrate the automatic rollback')
     }
 
     options {
@@ -13,20 +15,17 @@ pipeline {
         timeout(time: 90, unit: 'MINUTES')
     }
 
-    environment {
-        RENDER_API  = 'https://api.render.com/v1'
-        IMAGE_REPO  = 'docker.io/dario1338/shelter-api'
-        STAGING_ID  = 'srv-db0j781srm7s73fr95c0'
-        STAGING_URL = 'https://shelter-api-staging.onrender.com'
-        BLUE_ID     = 'srv-db0iv4142hec73e9n5p0'
-        BLUE_HOST   = 'shelter-api-blue.onrender.com'
-        GREEN_ID    = 'srv-db0jc5id0e5s73bt6lv0'
-        GREEN_HOST  = 'shelter-api-green.onrender.com'
-        PROXY_ID    = 'srv-db2fmnm7bikc73dkdtv0'
-        PROXY_URL   = 'https://shelter-proxy-7gcs.onrender.com'
-    }
-
     stages {
+        stage('Load helpers') {
+            steps {
+                checkout scm
+                script {
+                    render = load 'jenkins/render.groovy'
+                    render.init()
+                }
+            }
+        }
+
         stage('Validate parameters') {
             steps {
                 script {
@@ -45,8 +44,8 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
                     script {
-                        def deployId = deployImage(env.STAGING_ID, env.IMAGE_URL)
-                        waitForDeploy(env.STAGING_ID, deployId)
+                        def deployId = render.deployImage(env.STAGING_ID, env.IMAGE_URL)
+                        render.waitForDeploy(env.STAGING_ID, deployId)
                     }
                 }
             }
@@ -55,7 +54,7 @@ pipeline {
         stage('Staging: verify revision') {
             steps {
                 script {
-                    verifyRevision(env.STAGING_URL, env.COMMIT_FULL)
+                    render.verifyRevision(env.STAGING_URL, env.COMMIT_FULL)
                 }
             }
         }
@@ -76,181 +75,65 @@ pipeline {
             }
         }
 
-        stage('Production: find idle instance') {
-            steps {
-                script {
-                    def api = servedBy(env.PROXY_URL, '/api/health')
-                    def ui  = servedBy(env.PROXY_URL, '/')
-                    echo "Proxy serves the API from '${api}' and the UI from '${ui}'"
-                    if (!api || api != ui) {
-                        error "Cannot determine the active instance (api='${api}', ui='${ui}')"
-                    }
-                    if (api == env.BLUE_HOST) {
-                        env.ACTIVE_HOST = env.BLUE_HOST
-                        env.IDLE_HOST   = env.GREEN_HOST
-                        env.IDLE_ID     = env.GREEN_ID
-                    } else if (api == env.GREEN_HOST) {
-                        env.ACTIVE_HOST = env.GREEN_HOST
-                        env.IDLE_HOST   = env.BLUE_HOST
-                        env.IDLE_ID     = env.BLUE_ID
-                    } else {
-                        error "Unknown upstream '${api}'"
-                    }
-                    echo "Active: ${env.ACTIVE_HOST}, idle (release target): ${env.IDLE_HOST}"
-                }
+        // Only one job at a time may change production traffic (release or rollback).
+        // The lock is taken after the approval so that a waiting release never blocks a rollback.
+        stage('Production release') {
+            options {
+                lock('shelter-production')
             }
-        }
-
-        stage('Production: deploy to idle instance') {
-            steps {
-                withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
-                    script {
-                        def deployId = deployImage(env.IDLE_ID, env.IMAGE_URL)
-                        waitForDeploy(env.IDLE_ID, deployId)
-                        verifyRevision("https://${env.IDLE_HOST}", env.COMMIT_FULL)
+            stages {
+                stage('Production: find idle instance') {
+                    steps {
+                        script {
+                            render.resolveInstances()
+                        }
                     }
                 }
-            }
-        }
 
-        stage('Production: smoke tests on idle instance') {
-            steps {
-                dir('shelter-api') {
-                    sh "./mvnw test -Dtest=StagingSmokeTest -DexcludedGroups=never -Dstaging.url=https://${env.IDLE_HOST} -Dstaging.expectedRevision=${env.COMMIT_FULL}"
-                }
-            }
-        }
-
-        stage('Production: switch traffic and verify') {
-            steps {
-                withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
-                    script {
-                        try {
-                            setUpstream(env.IDLE_HOST)
-                            verifyThroughProxy(env.IDLE_HOST)
-                            if (params.TEST_ROLLBACK) {
-                                error 'TEST_ROLLBACK is set: simulated failure after the traffic switch'
+                stage('Production: deploy to idle instance') {
+                    steps {
+                        withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
+                            script {
+                                def deployId = render.deployImage(env.IDLE_ID, env.IMAGE_URL)
+                                render.waitForDeploy(env.IDLE_ID, deployId)
+                                render.verifyRevision("https://${env.IDLE_HOST}", env.COMMIT_FULL)
                             }
-                            dir('shelter-api') {
-                                sh "./mvnw test -Dtest=StagingSmokeTest -DexcludedGroups=never -Dstaging.url=${env.PROXY_URL} -Dstaging.expectedRevision=${env.COMMIT_FULL}"
+                        }
+                    }
+                }
+
+                stage('Production: smoke tests on idle instance') {
+                    steps {
+                        dir('shelter-api') {
+                            sh "./mvnw test -Dtest=StagingSmokeTest -DexcludedGroups=never -Dstaging.url=https://${env.IDLE_HOST} -Dstaging.expectedRevision=${env.COMMIT_FULL}"
+                        }
+                    }
+                }
+
+                stage('Production: switch traffic and verify') {
+                    steps {
+                        withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
+                            script {
+                                try {
+                                    render.setUpstream(env.IDLE_HOST)
+                                    render.verifyThroughProxy(env.IDLE_HOST, env.COMMIT_FULL)
+                                    if (params.TEST_ROLLBACK) {
+                                        error 'TEST_ROLLBACK is set: simulated failure after the traffic switch'
+                                    }
+                                    dir('shelter-api') {
+                                        sh "./mvnw test -Dtest=StagingSmokeTest -DexcludedGroups=never -Dstaging.url=${env.PROXY_URL} -Dstaging.expectedRevision=${env.COMMIT_FULL}"
+                                    }
+                                } catch (e) {
+                                    echo "Verification after the switch failed (${e.getMessage()}). Rolling back to ${env.ACTIVE_HOST}"
+                                    render.setUpstream(env.ACTIVE_HOST)
+                                    render.verifyServedBy(env.ACTIVE_HOST)
+                                    error "Release rolled back to ${env.ACTIVE_HOST}: ${e.getMessage()}"
+                                }
                             }
-                        } catch (e) {
-                            echo "Verification after the switch failed (${e.getMessage()}). Rolling back to ${env.ACTIVE_HOST}"
-                            setUpstream(env.ACTIVE_HOST)
-                            verifyServedBy(env.ACTIVE_HOST)
-                            error "Release rolled back to ${env.ACTIVE_HOST}: ${e.getMessage()}"
                         }
                     }
                 }
             }
-        }
-    }
-}
-
-def startDeploy(String serviceId, String jsonBody) {
-    def code = sh(returnStdout: true, script: """
-        curl -sS -o deploy-response.json -w '%{http_code}' \
-          -X POST "${env.RENDER_API}/services/${serviceId}/deploys" \
-          -H "Authorization: Bearer \$RENDER_KEY" \
-          -H "Content-Type: application/json" \
-          -d '${jsonBody}'
-    """).trim()
-    def body = readFile('deploy-response.json')
-    if (!(code ==~ /2\d\d/)) {
-        error "Render rejected the deploy request (HTTP ${code}): ${body}"
-    }
-    def deployId = readJSON(text: body).id
-    echo "Deploy ${deployId} started for service ${serviceId}"
-    return deployId
-}
-
-def deployImage(String serviceId, String imageUrl) {
-    return startDeploy(serviceId, "{\"imageUrl\": \"${imageUrl}\"}")
-}
-
-def waitForDeploy(String serviceId, String deployId) {
-    timeout(time: 15, unit: 'MINUTES') {
-        waitUntil(initialRecurrencePeriod: 10000) {
-            def out = sh(returnStdout: true, script: """
-                curl -sS -f "${env.RENDER_API}/services/${serviceId}/deploys/${deployId}" \
-                  -H "Authorization: Bearer \$RENDER_KEY"
-            """).trim()
-            def status = readJSON(text: out).status
-            echo "Deploy ${deployId}: ${status}"
-            if (status in ['build_failed', 'update_failed', 'pre_deploy_failed', 'canceled', 'deactivated']) {
-                error "Deploy ${deployId} failed with status: ${status}"
-            }
-            return status == 'live'
-        }
-    }
-}
-
-def verifyRevision(String baseUrl, String expected) {
-    timeout(time: 10, unit: 'MINUTES') {
-        waitUntil(initialRecurrencePeriod: 10000) {
-            def code = sh(returnStatus: true,
-                          script: "curl -sS -f --max-time 30 '${baseUrl}/api/info' -o info.json")
-            if (code != 0) {
-                echo "Service not responding yet (curl exit code ${code}), retrying"
-                return false
-            }
-            def revision = readJSON(file: 'info.json').revision
-            echo "Reported revision: ${revision}, expected: ${expected}"
-            return revision == expected
-        }
-    }
-}
-
-// Reads the X-Served-By header the proxy adds to every response (also to error responses).
-def servedBy(String baseUrl, String path) {
-    return sh(returnStdout: true, script: """
-        curl -sS -o /dev/null -D - --max-time 200 "${baseUrl}${path}" \
-          | grep -i '^x-served-by:' | head -1 | awk '{print \$2}' | tr -d '\\r' || true
-    """).trim()
-}
-
-def setUpstream(String host) {
-    for (key in ['API_UPSTREAM', 'UI_UPSTREAM']) {
-        def code = sh(returnStdout: true, script: """
-            curl -sS -o env-response.json -w '%{http_code}' \
-              -X PUT "${env.RENDER_API}/services/${env.PROXY_ID}/env-vars/${key}" \
-              -H "Authorization: Bearer \$RENDER_KEY" \
-              -H "Content-Type: application/json" \
-              -d '{"value": "${host}"}'
-        """).trim()
-        if (!(code ==~ /2\d\d/)) {
-            error "Failed to set ${key} (HTTP ${code}): ${readFile('env-response.json')}"
-        }
-    }
-    // Environment variable changes are not applied until the service is deployed.
-    def deployId = startDeploy(env.PROXY_ID, '{}')
-    waitForDeploy(env.PROXY_ID, deployId)
-}
-
-def verifyThroughProxy(String expectedHost) {
-    timeout(time: 10, unit: 'MINUTES') {
-        waitUntil(initialRecurrencePeriod: 10000) {
-            def code = sh(returnStatus: true,
-                          script: "curl -sS -f --max-time 60 -D headers.txt -o info.json '${env.PROXY_URL}/api/info'")
-            if (code != 0) {
-                echo "Proxy not answering correctly yet (curl exit code ${code}), retrying"
-                return false
-            }
-            def revision = readJSON(file: 'info.json').revision
-            def host = sh(returnStdout: true, script: "grep -i '^x-served-by:' headers.txt | head -1 | awk '{print \$2}' | tr -d '\\r' || true").trim()
-            echo "Proxy reports revision ${revision} served by ${host}; expected ${env.COMMIT_FULL} on ${expectedHost}"
-            return revision == env.COMMIT_FULL && host == expectedHost
-        }
-    }
-}
-
-// Used after a rollback: the previous version may not have /api/info, so only the routing is checked.
-def verifyServedBy(String expectedHost) {
-    timeout(time: 5, unit: 'MINUTES') {
-        waitUntil(initialRecurrencePeriod: 10000) {
-            def host = servedBy(env.PROXY_URL, '/api/health')
-            echo "Proxy serves the API from '${host}', expected '${expectedHost}'"
-            return host == expectedHost
         }
     }
 }
