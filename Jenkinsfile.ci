@@ -1,5 +1,5 @@
 pipeline {
-    agent any
+    agent { label 'docker'}
 
     stages {
         stage('Checkout') {
@@ -86,8 +86,12 @@ pipeline {
                         sh "docker buildx build --platform linux/amd64 --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${imageTag} --load ."
 
                         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                            sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-                            sh "docker push ${imageTag}"
+                            try {
+                                sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                                sh "docker push ${imageTag}"
+                            } finally {
+                                sh 'docker logout || true'
+                            }
                         }
                     }
                 }
@@ -122,8 +126,12 @@ pipeline {
                         sh "docker buildx build --platform linux/amd64 -t ${imageTag} --load ."
 
                         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                            sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-                            sh "docker push ${imageTag}"
+                            try {
+                                sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                                sh "docker push ${imageTag}"
+                            } finally {
+                                sh 'docker logout || true'
+                            }
                         }
                     }
                 }

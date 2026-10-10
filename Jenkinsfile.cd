@@ -1,7 +1,9 @@
 def render
 
 pipeline {
-    agent any
+    // No pipeline-wide agent: every part that does work allocates its own,
+    // so the manual approval does not hold an executor while it waits.
+    agent none
 
     parameters {
         string(name: 'GIT_COMMIT_FULL', defaultValue: '',
@@ -16,57 +18,63 @@ pipeline {
     }
 
     stages {
-        stage('Load helpers') {
-            steps {
-                checkout scm
-                script {
-                    render = load 'jenkins/render.groovy'
-                    render.init()
-                }
-            }
-        }
-
-        stage('Validate parameters') {
-            steps {
-                script {
-                    def commit = params.GIT_COMMIT_FULL.trim()
-                    if (!(commit ==~ /^[0-9a-f]{40}$/)) {
-                        error "GIT_COMMIT_FULL must be a full 40-character hash, got: '${commit}'"
-                    }
-                    env.COMMIT_FULL = commit
-                    env.IMAGE_URL = "${env.IMAGE_REPO}:${commit.take(7)}"
-                    echo "Delivering image ${env.IMAGE_URL}"
-                }
-            }
-        }
-
-        stage('Staging: deploy') {
-            steps {
-                withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
-                    script {
-                        def deployId = render.deployImage(env.STAGING_ID, env.IMAGE_URL)
-                        render.waitForDeploy(env.STAGING_ID, deployId)
+        stage('Staging') {
+            agent { label 'docker' }
+            stages {
+                stage('Load helpers') {
+                    steps {
+                        checkout scm
+                        script {
+                            render = load 'jenkins/render.groovy'
+                            render.init()
+                        }
                     }
                 }
-            }
-        }
 
-        stage('Staging: verify revision') {
-            steps {
-                script {
-                    render.verifyRevision(env.STAGING_URL, env.COMMIT_FULL)
+                stage('Validate parameters') {
+                    steps {
+                        script {
+                            def commit = params.GIT_COMMIT_FULL.trim()
+                            if (!(commit ==~ /^[0-9a-f]{40}$/)) {
+                                error "GIT_COMMIT_FULL must be a full 40-character hash, got: '${commit}'"
+                            }
+                            env.COMMIT_FULL = commit
+                            env.IMAGE_URL = "${env.IMAGE_REPO}:${commit.take(7)}"
+                            echo "Delivering image ${env.IMAGE_URL}"
+                        }
+                    }
+                }
+
+                stage('Staging: deploy') {
+                    steps {
+                        withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
+                            script {
+                                def deployId = render.deployImage(env.STAGING_ID, env.IMAGE_URL)
+                                render.waitForDeploy(env.STAGING_ID, deployId)
+                            }
+                        }
+                    }
+                }
+
+                stage('Staging: verify revision') {
+                    steps {
+                        script {
+                            render.verifyRevision(env.STAGING_URL, env.COMMIT_FULL)
+                        }
+                    }
+                }
+
+                stage('Staging: smoke tests') {
+                    steps {
+                        dir('shelter-api') {
+                            sh "./mvnw test -Dtest=StagingSmokeTest -DexcludedGroups=never -Dstaging.url=${env.STAGING_URL} -Dstaging.expectedRevision=${env.COMMIT_FULL}"
+                        }
+                    }
                 }
             }
         }
 
-        stage('Staging: smoke tests') {
-            steps {
-                dir('shelter-api') {
-                    sh "./mvnw test -Dtest=StagingSmokeTest -DexcludedGroups=never -Dstaging.url=${env.STAGING_URL} -Dstaging.expectedRevision=${env.COMMIT_FULL}"
-                }
-            }
-        }
-
+        // No agent here on purpose: waiting for a human must not occupy an executor.
         stage('Approval') {
             steps {
                 timeout(time: 30, unit: 'MINUTES') {
@@ -78,12 +86,15 @@ pipeline {
         // Only one job at a time may change production traffic (release or rollback).
         // The lock is taken after the approval so that a waiting release never blocks a rollback.
         stage('Production release') {
+            agent { label 'docker' }
             options {
                 lock('shelter-production')
             }
             stages {
                 stage('Production: find idle instance') {
                     steps {
+                        // The agent workspace is fresh after the approval wait.
+                        checkout scm
                         script {
                             render.resolveInstances()
                         }
