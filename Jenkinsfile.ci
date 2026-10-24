@@ -24,43 +24,43 @@ pipeline {
             }
         }
 
-        stage('Backend: SonarQube Analysis') {
-            steps {
-                dir('shelter-api') {
-                    withSonarQubeEnv('sonar-server') {
-                        sh './mvnw sonar:sonar'
+                stage('Backend: Integration Tests') {
+                    steps {
+                        dir('shelter-api') {
+                            withEnv(['TESTCONTAINERS_RYUK_DISABLED=true']) {
+                                sh './mvnw verify -DskipUTs=true -Dit.test=*IntegrationTest'
+                            }
+                        }
                     }
                 }
-            }
-        }
 
-        stage('Quality Gate') {
-            steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-
-        stage('Backend: Integration Tests') {
-            steps {
-                dir('shelter-api') {
-                    withEnv(['TESTCONTAINERS_RYUK_DISABLED=true']) {
-                        sh './mvnw test -Dtest=*IntegrationTest'
+                stage('Backend: Acceptance Tests') {
+                    steps {
+                        dir('shelter-api') {
+                            withEnv(['TESTCONTAINERS_RYUK_DISABLED=true']) {
+                                sh './mvnw verify -DskipUTs=true -Dit.test=*AcceptanceTest'
+                            }
+                        }
                     }
                 }
-            }
-        }
 
-        stage('Backend: Acceptance Tests') {
-            steps {
-                dir('shelter-api') {
-                    withEnv(['TESTCONTAINERS_RYUK_DISABLED=true']) {
-                        sh './mvnw test -Dtest=*AcceptanceTest'
+                stage('Backend: SonarQube Analysis') {
+                    steps {
+                        dir('shelter-api') {
+                            withSonarQubeEnv('sonar-server') {
+                                sh './mvnw sonar:sonar'
+                            }
+                        }
                     }
                 }
-            }
-        }
+
+                stage('Quality Gate') {
+                    steps {
+                        timeout(time: 5, unit: 'MINUTES') {
+                            waitForQualityGate abortPipeline: true
+                        }
+                    }
+                }
 
         stage('Docker: Build (verification)') {
             when { not { branch 'main' } }
