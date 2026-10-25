@@ -21,3 +21,13 @@ RUN set -eux; \
     gname="$(getent group "${DOCKER_GID}" | cut -d: -f1 || true)"; \
     if [ -z "$gname" ]; then groupadd -g "${DOCKER_GID}" dockerhost; gname=dockerhost; fi; \
     usermod -aG "$gname" jenkins
+
+# Trivy: pinned release, verified by SHA-256 (supply chain: v0.69.4-v0.69.6 were compromised in March 2026)
+ARG TRIVY_VERSION=0.76.1
+ARG TRIVY_SHA256=e174dff2a6dba5e3ae41f8d0537a6324405bd08132497340304c6b20e0f16a1f
+RUN set -eux; \
+    curl -fsSL -o /tmp/trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-ARM64.tar.gz"; \
+    echo "${TRIVY_SHA256}  /tmp/trivy.tar.gz" | sha256sum -c -; \
+    tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy; \
+    rm /tmp/trivy.tar.gz; \
+    trivy --version
