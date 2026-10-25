@@ -20,8 +20,9 @@ RUN apt-get update \
 RUN set -eux; \
     gname="$(getent group "${DOCKER_GID}" | cut -d: -f1 || true)"; \
     if [ -z "$gname" ]; then groupadd -g "${DOCKER_GID}" dockerhost; gname=dockerhost; fi; \
-    usermod -aG "$gname" jenkins \
+    usermod -aG "$gname" jenkins
 
+# Trivy: pinned release, verified by SHA-256 (supply chain: v0.69.4-v0.69.6 were compromised in March 2026)
 ARG TRIVY_VERSION=0.76.1
 ARG TRIVY_SHA256=e174dff2a6dba5e3ae41f8d0537a6324405bd08132497340304c6b20e0f16a1f
 RUN set -eux; \
