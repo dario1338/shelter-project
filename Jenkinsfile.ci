@@ -1,3 +1,10 @@
+// Scan a local image with Trivy: report HIGH/CRITICAL findings, fail the build only on CRITICAL
+// findings that already have a fix available (--ignore-unfixed).
+def trivyScan(String image) {
+    sh "trivy image --no-progress --timeout 15m --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed ${image}"
+    sh "trivy image --no-progress --timeout 15m --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 ${image}"
+}
+
 pipeline {
     agent { label 'docker'}
 
@@ -62,19 +69,23 @@ pipeline {
                     }
                 }
 
-        stage('Docker: Build (verification)') {
-            when { not { branch 'main' } }
-            steps {
-                dir('shelter-api') {
-                    script {
-                        def checkTag = "shelter-api:check-${env.GIT_COMMIT.take(7)}"
-                        sh "docker rmi -f ${checkTag} || true"
-                        sh "docker build --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
-                        sh "docker rmi -f ${checkTag} || true"
+                stage('Docker: Build (verification)') {
+                    when { not { branch 'main' } }
+                    steps {
+                        dir('shelter-api') {
+                            script {
+                                def checkTag = "shelter-api:check-${env.GIT_COMMIT.take(7)}"
+                                sh "docker rmi -f ${checkTag} || true"
+                                try {
+                                    sh "docker build --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
+                                    trivyScan(checkTag)
+                                } finally {
+                                    sh "docker rmi -f ${checkTag} || true"
+                                }
+                            }
+                        }
                     }
                 }
-            }
-        }
 
         stage('Docker: Build & Push') {
             when { branch 'main' }
@@ -84,6 +95,7 @@ pipeline {
                         def imageTag = "dario1338/shelter-api:${env.GIT_COMMIT.take(7)}"
                         sh "docker rmi -f ${imageTag} || true"
                         sh "docker buildx build --platform linux/amd64 --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${imageTag} --load ."
+                        trivyScan(imageTag)
 
                         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                             try {
@@ -107,6 +119,7 @@ pipeline {
                         sh "docker rmi -f ${checkTag} || true"
                         try {
                             sh "docker build -t ${checkTag} ."
+                            trivyScan(checkTag)
                             sh "docker run --rm -e API_UPSTREAM=example.com -e UI_UPSTREAM=example.com ${checkTag} nginx -t"
                         } finally {
                             sh "docker rmi -f ${checkTag} || true"
@@ -124,6 +137,7 @@ pipeline {
                         def imageTag = "dario1338/shelter-proxy:${env.GIT_COMMIT.take(7)}"
                         sh "docker rmi -f ${imageTag} || true"
                         sh "docker buildx build --platform linux/amd64 -t ${imageTag} --load ."
+                        trivyScan(imageTag)
 
                         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                             try {
