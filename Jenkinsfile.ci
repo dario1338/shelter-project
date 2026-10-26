@@ -34,9 +34,7 @@ pipeline {
                 stage('Backend: Integration Tests') {
                     steps {
                         dir('shelter-api') {
-                            withEnv(['TESTCONTAINERS_RYUK_DISABLED=true']) {
-                                sh './mvnw verify -DskipUTs=true -Dit.test=*IntegrationTest'
-                            }
+                            sh './mvnw verify -DskipUTs=true -Dit.test=*IntegrationTest'
                         }
                     }
                 }
@@ -44,9 +42,7 @@ pipeline {
                 stage('Backend: Acceptance Tests') {
                     steps {
                         dir('shelter-api') {
-                            withEnv(['TESTCONTAINERS_RYUK_DISABLED=true']) {
-                                sh './mvnw verify -DskipUTs=true -Dit.test=*AcceptanceTest'
-                            }
+                            sh './mvnw verify -DskipUTs=true -Dit.test=*AcceptanceTest'
                         }
                     }
                 }
