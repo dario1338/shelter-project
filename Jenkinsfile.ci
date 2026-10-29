@@ -73,7 +73,7 @@ pipeline {
                                 def checkTag = "shelter-api:check-${env.GIT_COMMIT.take(7)}"
                                 sh "docker rmi -f ${checkTag} || true"
                                 try {
-                                    sh "docker build --pull --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
+                                    sh "docker build --pull --no-cache-filter runtime --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
                                     trivyScan(checkTag)
                                 } finally {
                                     sh "docker rmi -f ${checkTag} || true"
@@ -90,7 +90,7 @@ pipeline {
                     script {
                         def imageTag = "dario1338/shelter-api:${env.GIT_COMMIT.take(7)}"
                         sh "docker rmi -f ${imageTag} || true"
-                        sh "docker buildx build --pull --platform linux/amd64 --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${imageTag} --load ."
+                        sh "docker buildx build --pull --no-cache-filter runtime --platform linux/amd64 --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${imageTag} --load ."
                         trivyScan(imageTag)
 
                         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
