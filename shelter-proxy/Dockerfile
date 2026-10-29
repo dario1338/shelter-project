@@ -1,4 +1,4 @@
-FROM nginx:1.28-alpine
+FROM nginx:1.29-alpine
 
 # Apply Alpine security patches that the upstream nginx image does not include yet
 RUN apk upgrade --no-cache
