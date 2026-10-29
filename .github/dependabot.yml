@@ -1,0 +1,55 @@
+version: 2
+updates:
+  # Backend dependencies (Spring Boot, Testcontainers, JaCoCo, ...)
+  - package-ecosystem: "maven"
+    directory: "/shelter-api"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+
+  # Base images in the API Dockerfile
+  - package-ecosystem: "docker"
+    directory: "/shelter-api"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+    ignore:
+      # Stay on Java 21 LTS; a Java upgrade is a deliberate decision
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "maven"
+        update-types: ["version-update:semver-major"]
+
+  # Base image of the reverse proxy
+  - package-ecosystem: "docker"
+    directory: "/shelter-proxy"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+
+  # Base image of the Jenkins build agent
+  - package-ecosystem: "docker"
+    directory: "/jenkins/agent"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
