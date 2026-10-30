@@ -47,6 +47,14 @@ pipeline {
                     }
                 }
 
+                stage('Backend: Coverage Gate') {
+                    steps {
+                        dir('shelter-api') {
+                            sh './mvnw jacoco:check@coverage-check'
+                        }
+                    }
+                }
+
                 stage('Backend: SonarQube Analysis') {
                     steps {
                         dir('shelter-api') {
