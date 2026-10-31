@@ -98,16 +98,21 @@ pipeline {
                     script {
                         def imageTag = "dario1338/shelter-api:${env.GIT_COMMIT.take(7)}"
                         sh "docker rmi -f ${imageTag} || true"
-                        sh "docker buildx build --pull --no-cache-filter runtime --platform linux/amd64 --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${imageTag} --load ."
-                        trivyScan(imageTag)
+                        try {
+                            sh "docker buildx build --pull --no-cache-filter runtime --platform linux/amd64 --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${imageTag} --load ."
+                            trivyScan(imageTag)
 
-                        withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                            try {
-                                sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-                                sh "docker push ${imageTag}"
-                            } finally {
-                                sh 'docker logout || true'
+                            withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                                try {
+                                    sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                                    sh "docker push ${imageTag}"
+                                } finally {
+                                    sh 'docker logout || true'
+                                }
                             }
+                        } finally {
+                            // The image lives on Docker Hub; do not keep a local copy on the agent
+                            sh "docker rmi -f ${imageTag} || true"
                         }
                     }
                 }
@@ -140,16 +145,20 @@ pipeline {
                     script {
                         def imageTag = "dario1338/shelter-proxy:${env.GIT_COMMIT.take(7)}"
                         sh "docker rmi -f ${imageTag} || true"
-                        sh "docker buildx build --pull --no-cache --platform linux/amd64 -t ${imageTag} --load ."
-                        trivyScan(imageTag)
+                        try {
+                            sh "docker buildx build --pull --no-cache --platform linux/amd64 -t ${imageTag} --load ."
+                            trivyScan(imageTag)
 
-                        withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                            try {
-                                sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-                                sh "docker push ${imageTag}"
-                            } finally {
-                                sh 'docker logout || true'
+                            withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                                try {
+                                    sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                                    sh "docker push ${imageTag}"
+                                } finally {
+                                    sh 'docker logout || true'
+                                }
                             }
+                        } finally {
+                            sh "docker rmi -f ${imageTag} || true"
                         }
                     }
                 }
@@ -165,6 +174,13 @@ pipeline {
                       parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT)],
                       wait: false
             }
+        }
+    }
+
+    post {
+        always {
+            // Remove build cache older than a week so the agent disk does not fill up
+            sh 'docker builder prune --filter until=168h -f || true'
         }
     }
 }
