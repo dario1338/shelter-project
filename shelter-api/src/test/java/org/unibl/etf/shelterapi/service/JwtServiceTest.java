@@ -42,11 +42,15 @@ class JwtServiceTest {
 
     @Test
     void signingKeyShorterThan32BytesIsRejected() {
-        assertThrows(IllegalArgumentException.class, () -> new JwtProperties("too-short", Duration.ofHours(1)));
+        Duration expiration = Duration.ofHours(1);
+
+        assertThrows(IllegalArgumentException.class, () -> new JwtProperties("too-short", expiration));
     }
 
     @Test
     void missingSigningKeyIsRejected() {
-        assertThrows(IllegalArgumentException.class, () -> new JwtProperties(null, Duration.ofHours(1)));
+        Duration expiration = Duration.ofHours(1);
+
+        assertThrows(IllegalArgumentException.class, () -> new JwtProperties(null, expiration));
     }
 }

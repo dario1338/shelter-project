@@ -28,6 +28,8 @@ import java.nio.charset.StandardCharsets;
 @EnableConfigurationProperties({JwtProperties.class, AdminProperties.class})
 public class SecurityConfig {
 
+    private static final String ADMIN_ROLE = "ADMIN";
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) {
         http
@@ -41,9 +43,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         // Browsing dogs is public; creating, changing and deleting is for admins only.
                         .requestMatchers(HttpMethod.GET, "/api/dogs", "/api/dogs/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/dogs").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/api/dogs/*").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/dogs/*").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/dogs").hasRole(ADMIN_ROLE)
+                        .requestMatchers(HttpMethod.PUT, "/api/dogs/*").hasRole(ADMIN_ROLE)
+                        .requestMatchers(HttpMethod.DELETE, "/api/dogs/*").hasRole(ADMIN_ROLE)
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
