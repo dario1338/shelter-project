@@ -5,3 +5,14 @@ spring:
     url: jdbc:postgresql://localhost:5433/shelter_database
     username: postgres
     password: postgres
+
+app:
+  security:
+    jwt:
+      # Required, no default on purpose: the application refuses to start without it.
+      secret: ${JWT_SECRET}
+      expiration: 1h
+  admin:
+    # Optional: the initial admin is created at startup only when both values are set.
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
