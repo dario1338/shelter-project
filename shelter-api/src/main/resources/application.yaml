@@ -11,7 +11,13 @@ app:
     jwt:
       # Required, no default on purpose: the application refuses to start without it.
       secret: ${JWT_SECRET}
-      expiration: 1h
+      expiration: 15m
+    refresh:
+      expiration: 7d
+    csrf:
+      # Required: comma-separated list of origins that may call the cookie-based endpoints
+      # (refresh and logout), for example the public URL of the application.
+      allowed-origins: ${ALLOWED_ORIGINS}
   admin:
     # Optional: the initial admin is created at startup only when both values are set.
     email: ${ADMIN_EMAIL:}

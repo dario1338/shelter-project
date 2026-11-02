@@ -1,8 +1,10 @@
 package org.unibl.etf.shelterapi.exception;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -33,5 +35,28 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     public ProblemDetail handleInvalidCredentials(InvalidCredentialsException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    public ProblemDetail handleInvalidRefreshToken(InvalidRefreshTokenException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
+
+    @ExceptionHandler(ForbiddenOriginException.class)
+    public ProblemDetail handleForbiddenOrigin(ForbiddenOriginException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidPasswordException.class)
+    public ProblemDetail handleInvalidPassword(InvalidPasswordException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(TooManyAttemptsException.class)
+    public ResponseEntity<ProblemDetail> handleTooManyAttempts(TooManyAttemptsException ex) {
+        ProblemDetail body = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(body);
     }
 }

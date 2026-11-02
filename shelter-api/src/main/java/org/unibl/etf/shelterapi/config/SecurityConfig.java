@@ -25,7 +25,13 @@ import java.nio.charset.StandardCharsets;
 
 @Configuration
 @EnableWebSecurity
-@EnableConfigurationProperties({JwtProperties.class, AdminProperties.class})
+@EnableConfigurationProperties({
+        JwtProperties.class,
+        AdminProperties.class,
+        RefreshTokenProperties.class,
+        LoginThrottleProperties.class,
+        CsrfProperties.class
+})
 public class SecurityConfig {
 
     private static final String ADMIN_ROLE = "ADMIN";
@@ -34,14 +40,18 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) {
         http
-                // Stateless API: no session cookie is issued, so there is nothing for CSRF to protect.
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Spring's CSRF filter is disabled on purpose. Every endpoint except /refresh and /logout
+                // authenticates with the Authorization header, which a browser never attaches by itself.
+                // /refresh and /logout use the refresh cookie (SameSite=Strict, Path=/api/auth) and
+                // additionally validate the Origin header (see OriginValidator).
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/health", "/api/info").permitAll()
                         // Spring forwards errors (for example validation failures) to /error
                         .requestMatchers("/error").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login",
+                                "/api/auth/refresh", "/api/auth/logout").permitAll()
                         // Browsing dogs is public; creating, changing and deleting is for admins only.
                         .requestMatchers(HttpMethod.GET, "/api/dogs", "/api/dogs/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/dogs").hasRole(ADMIN_ROLE)
