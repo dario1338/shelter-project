@@ -31,3 +31,18 @@ RUN set -eux; \
     tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy; \
     rm /tmp/trivy.tar.gz; \
     trivy --version
+
+# Node.js for the frontend build (pinned version, verified against the checksum published on nodejs.org).
+# Unpacked to /opt/node and linked into /usr/local/bin, because SSH sessions do not see Docker's ENV PATH.
+ARG NODE_VERSION=22.19.0
+ARG NODE_SHA256=d32817b937219b8f131a28546035183d79e7fd17a86e38ccb8772901a7cd9009
+RUN curl -fsSL -o /tmp/node.tar.gz "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-arm64.tar.gz" \
+    && echo "${NODE_SHA256}  /tmp/node.tar.gz" | sha256sum -c - \
+    && mkdir -p /opt/node \
+    && tar -xzf /tmp/node.tar.gz -C /opt/node --strip-components=1 --no-same-owner \
+    && rm /tmp/node.tar.gz \
+    && ln -s /opt/node/bin/node /usr/local/bin/node \
+    && ln -s /opt/node/bin/npm /usr/local/bin/npm \
+    && ln -s /opt/node/bin/npx /usr/local/bin/npx \
+    && node --version \
+    && npm --version
