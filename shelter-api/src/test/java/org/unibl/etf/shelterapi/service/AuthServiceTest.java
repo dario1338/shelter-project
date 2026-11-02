@@ -88,9 +88,9 @@ class AuthServiceTest {
     @Test
     void registerRejectsAnEmailThatIsAlreadyUsed() {
         when(userRepository.existsByEmail(EMAIL)).thenReturn(true);
+        RegisterRequest request = new RegisterRequest(EMAIL, PASSWORD, "Ana", "Anic");
 
-        assertThrows(EmailAlreadyUsedException.class,
-                () -> authService.register(new RegisterRequest(EMAIL, PASSWORD, "Ana", "Anic")));
+        assertThrows(EmailAlreadyUsedException.class, () -> authService.register(request));
         verify(userRepository, never()).save(any(User.class));
     }
 
@@ -112,9 +112,9 @@ class AuthServiceTest {
     void authenticateRecordsAFailureForAWrongPassword() {
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(existingUser()));
         when(passwordEncoder.matches(PASSWORD, HASH)).thenReturn(false);
+        LoginRequest request = new LoginRequest(EMAIL, PASSWORD);
 
-        assertThrows(InvalidCredentialsException.class,
-                () -> authService.authenticate(new LoginRequest(EMAIL, PASSWORD)));
+        assertThrows(InvalidCredentialsException.class, () -> authService.authenticate(request));
         verify(loginThrottleService).recordFailure(EMAIL);
         verify(loginThrottleService, never()).reset(EMAIL);
     }
@@ -123,9 +123,9 @@ class AuthServiceTest {
     void authenticateStillHashesWhenTheEmailDoesNotExist() {
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
         when(passwordEncoder.matches(PASSWORD, DUMMY_HASH)).thenReturn(false);
+        LoginRequest request = new LoginRequest(EMAIL, PASSWORD);
 
-        assertThrows(InvalidCredentialsException.class,
-                () -> authService.authenticate(new LoginRequest(EMAIL, PASSWORD)));
+        assertThrows(InvalidCredentialsException.class, () -> authService.authenticate(request));
         verify(passwordEncoder).matches(PASSWORD, DUMMY_HASH);
         verify(loginThrottleService).recordFailure(EMAIL);
     }
@@ -133,9 +133,9 @@ class AuthServiceTest {
     @Test
     void authenticateStopsWhenTheAccountIsLocked() {
         doThrow(new TooManyAttemptsException(60)).when(loginThrottleService).checkAllowed(EMAIL);
+        LoginRequest request = new LoginRequest(EMAIL, PASSWORD);
 
-        assertThrows(TooManyAttemptsException.class,
-                () -> authService.authenticate(new LoginRequest(EMAIL, PASSWORD)));
+        assertThrows(TooManyAttemptsException.class, () -> authService.authenticate(request));
         verifyNoInteractions(userRepository);
     }
 
@@ -173,17 +173,17 @@ class AuthServiceTest {
     void changePasswordRejectsAWrongCurrentPassword() {
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(existingUser()));
         when(passwordEncoder.matches(PASSWORD, HASH)).thenReturn(false);
+        ChangePasswordRequest request = new ChangePasswordRequest(PASSWORD, NEW_PASSWORD);
 
-        assertThrows(InvalidPasswordException.class,
-                () -> authService.changePassword(EMAIL, new ChangePasswordRequest(PASSWORD, NEW_PASSWORD)));
+        assertThrows(InvalidPasswordException.class, () -> authService.changePassword(EMAIL, request));
         verify(refreshTokenService, never()).revokeAllForUser(anyLong());
     }
 
     @Test
     void changePasswordFailsForAnUnknownUser() {
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+        ChangePasswordRequest request = new ChangePasswordRequest(PASSWORD, NEW_PASSWORD);
 
-        assertThrows(ResourceNotFoundException.class,
-                () -> authService.changePassword(EMAIL, new ChangePasswordRequest(PASSWORD, NEW_PASSWORD)));
+        assertThrows(ResourceNotFoundException.class, () -> authService.changePassword(EMAIL, request));
     }
 }

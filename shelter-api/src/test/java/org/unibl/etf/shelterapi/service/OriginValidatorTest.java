@@ -39,6 +39,8 @@ class OriginValidatorTest {
 
     @Test
     void rejectsAnEmptyConfiguration() {
-        assertThrows(IllegalArgumentException.class, () -> new CsrfProperties(List.of(" ")));
+        List<String> blankOrigins = List.of(" ");
+
+        assertThrows(IllegalArgumentException.class, () -> new CsrfProperties(blankOrigins));
     }
 }
