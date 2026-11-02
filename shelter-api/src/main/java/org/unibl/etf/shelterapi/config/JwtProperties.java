@@ -7,7 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 @ConfigurationProperties(prefix = "app.security.jwt")
-public record JwtProperties(String secret, @DefaultValue("1h") Duration expiration) {
+public record JwtProperties(String secret, @DefaultValue("15m") Duration expiration) {
 
     private static final int MIN_SECRET_BYTES = 32;
 
