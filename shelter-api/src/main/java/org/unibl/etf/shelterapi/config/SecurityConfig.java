@@ -29,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 public class SecurityConfig {
 
     private static final String ADMIN_ROLE = "ADMIN";
+    private static final String USER_ROLE = "USER";
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) {
@@ -46,6 +47,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/dogs").hasRole(ADMIN_ROLE)
                         .requestMatchers(HttpMethod.PUT, "/api/dogs/*").hasRole(ADMIN_ROLE)
                         .requestMatchers(HttpMethod.DELETE, "/api/dogs/*").hasRole(ADMIN_ROLE)
+                        // Sponsorships: users apply and cancel their own, admins review everything.
+                        .requestMatchers(HttpMethod.POST, "/api/sponsorships", "/api/sponsorships/*/cancel")
+                        .hasRole(USER_ROLE)
+                        .requestMatchers(HttpMethod.GET, "/api/sponsorships/me").authenticated()
+                        .requestMatchers("/api/sponsorships", "/api/sponsorships/**").hasRole(ADMIN_ROLE)
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
