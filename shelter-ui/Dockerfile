@@ -8,6 +8,8 @@ COPY . .
 RUN npm run build
 
 FROM nginx:1.28-alpine AS runtime
+# Pick up OS security fixes newer than the base image, like the API and proxy images do
+RUN apk upgrade --no-cache
 ARG GIT_COMMIT=unknown
 LABEL org.opencontainers.image.revision=$GIT_COMMIT
 COPY default.conf /etc/nginx/conf.d/default.conf
