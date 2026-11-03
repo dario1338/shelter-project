@@ -1,6 +1,6 @@
 # Build stage runs on the builder's own architecture: the output is static files, so the
 # (slow, emulated) target platform is only needed for the final nginx stage.
-FROM --platform=$BUILDPLATFORM node:22.19-alpine AS build
+FROM --platform=$BUILDPLATFORM node:22.23-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
