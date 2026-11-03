@@ -1,16 +1,12 @@
-import { useEffect, useState } from "react";
+import { Route, Routes } from "react-router-dom";
+import HomePage from "./pages/HomePage";
+import NotFoundPage from "./pages/NotFoundPage";
 
-function App() {
-  const [status, setStatus] = useState("učitavanje...");
-
-  useEffect(() => {
-    fetch("/api/health")
-      .then((res) => res.json())
-      .then((data) => setStatus(data.status))
-      .catch(() => setStatus("GREŠKA"));
-  }, []);
-
-  return <h1>Backend status: {status}</h1>;
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
+  );
 }
-
-export default App;
