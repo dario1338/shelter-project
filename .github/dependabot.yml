@@ -69,3 +69,44 @@ updates:
       prefix: "deps"
     labels:
       - "dependencies"
+
+  # Frontend dependencies (React, Vite, Vitest, ESLint, ...)
+  - package-ecosystem: "npm"
+    directory: "/shelter-ui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    rebase-strategy: "disabled"
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+    groups:
+      # One PR for all minor and patch updates; major updates stay separate
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Base images in the UI Dockerfile (Node build stage, nginx runtime stage)
+  - package-ecosystem: "docker"
+    directory: "/shelter-ui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    rebase-strategy: "disabled"
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+    ignore:
+      # Stay on the Node LTS line (22) and the nginx stable branch (1.28), like the proxy
+      - dependency-name: "node"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "nginx"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"

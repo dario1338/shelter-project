@@ -5,8 +5,38 @@ def trivyScan(String image) {
     sh "trivy image --no-progress --timeout 15m --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 ${image}"
 }
 
+// Decide which components a pull request touches. Anything that cannot be determined (branch
+// build, git failure) or that changes the pipeline itself selects every component, so a check
+// is never skipped by mistake. The branch name is read from the environment inside the shell
+// script, never interpolated into it.
+def detectChangedComponents() {
+    def everything = [api: true, ui: true, proxy: true]
+    if (!env.CHANGE_TARGET) {
+        return everything
+    }
+    sh 'git fetch --no-tags origin "+refs/heads/${CHANGE_TARGET}:refs/remotes/origin/${CHANGE_TARGET}" || true'
+    def status = sh(returnStatus: true, script: 'git diff --name-only "origin/${CHANGE_TARGET}...HEAD" > .changed-files')
+    if (status != 0) {
+        echo 'Could not determine the changed files, building every component.'
+        return everything
+    }
+    def changed = [api: false, ui: false, proxy: false]
+    for (String file : readFile('.changed-files').readLines()) {
+        if (file == 'Jenkinsfile.ci' || file.startsWith('jenkins/')) {
+            return everything
+        } else if (file.startsWith('shelter-api/')) {
+            changed.api = true
+        } else if (file.startsWith('shelter-ui/')) {
+            changed.ui = true
+        } else if (file.startsWith('shelter-proxy/')) {
+            changed.proxy = true
+        }
+    }
+    return changed
+}
+
 pipeline {
-    agent { label 'docker'}
+    agent { label 'docker' }
 
     stages {
         stage('Checkout') {
@@ -15,7 +45,22 @@ pipeline {
             }
         }
 
+        stage('Detect changes') {
+            steps {
+                script {
+                    def components = detectChangedComponents()
+                    env.RUN_API = "${components.api}"
+                    env.RUN_UI = "${components.ui}"
+                    env.RUN_PROXY = "${components.proxy}"
+                    echo "Components to build -> api: ${components.api}, ui: ${components.ui}, proxy: ${components.proxy}"
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------- Backend
+
         stage('Backend: Build') {
+            when { expression { env.RUN_API == 'true' } }
             steps {
                 dir('shelter-api') {
                     sh './mvnw clean compile'
@@ -24,6 +69,7 @@ pipeline {
         }
 
         stage('Backend: Unit Tests') {
+            when { expression { env.RUN_API == 'true' } }
             steps {
                 dir('shelter-api') {
                     sh './mvnw test'
@@ -31,65 +77,77 @@ pipeline {
             }
         }
 
-                stage('Backend: Integration Tests') {
-                    steps {
-                        dir('shelter-api') {
-                            sh './mvnw verify -DskipUTs=true -Dit.test=*IntegrationTest'
-                        }
-                    }
+        stage('Backend: Integration Tests') {
+            when { expression { env.RUN_API == 'true' } }
+            steps {
+                dir('shelter-api') {
+                    sh './mvnw verify -DskipUTs=true -Dit.test=*IntegrationTest'
                 }
+            }
+        }
 
-                stage('Backend: Acceptance Tests') {
-                    steps {
-                        dir('shelter-api') {
-                            sh './mvnw verify -DskipUTs=true -Dit.test=*AcceptanceTest'
-                        }
-                    }
+        stage('Backend: Acceptance Tests') {
+            when { expression { env.RUN_API == 'true' } }
+            steps {
+                dir('shelter-api') {
+                    sh './mvnw verify -DskipUTs=true -Dit.test=*AcceptanceTest'
                 }
+            }
+        }
 
-                stage('Backend: Coverage Gate') {
-                    steps {
-                        dir('shelter-api') {
-                            sh './mvnw jacoco:check@coverage-check'
-                        }
-                    }
+        stage('Backend: Coverage Gate') {
+            when { expression { env.RUN_API == 'true' } }
+            steps {
+                dir('shelter-api') {
+                    sh './mvnw jacoco:check@coverage-check'
                 }
+            }
+        }
 
-                stage('Backend: SonarQube Analysis') {
-                    steps {
-                        dir('shelter-api') {
-                            withSonarQubeEnv('sonar-server') {
-                                sh './mvnw sonar:sonar'
-                            }
-                        }
+        stage('Backend: SonarQube Analysis') {
+            when { expression { env.RUN_API == 'true' } }
+            steps {
+                dir('shelter-api') {
+                    withSonarQubeEnv('sonar-server') {
+                        sh './mvnw sonar:sonar'
                     }
                 }
+            }
+        }
 
-                stage('Quality Gate') {
-                    steps {
-                        timeout(time: 5, unit: 'MINUTES') {
-                            waitForQualityGate abortPipeline: true
-                        }
-                    }
+        // waitForQualityGate follows the most recent analysis of this build, so every analysis
+        // is followed by its own gate before the next analysis starts.
+        stage('Backend: Quality Gate') {
+            when { expression { env.RUN_API == 'true' } }
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
                 }
+            }
+        }
 
-                stage('Docker: Build (verification)') {
-                    when { not { branch 'main' } }
-                    steps {
-                        dir('shelter-api') {
-                            script {
-                                def checkTag = "shelter-api:check-${env.GIT_COMMIT.take(7)}"
-                                sh "docker rmi -f ${checkTag} || true"
-                                try {
-                                    sh "docker build --pull --no-cache-filter runtime --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
-                                    trivyScan(checkTag)
-                                } finally {
-                                    sh "docker rmi -f ${checkTag} || true"
-                                }
-                            }
+        stage('Docker: Build (verification)') {
+            when {
+                allOf {
+                    not { branch 'main' }
+                    expression { env.RUN_API == 'true' }
+                }
+            }
+            steps {
+                dir('shelter-api') {
+                    script {
+                        def checkTag = "shelter-api:check-${env.GIT_COMMIT.take(7)}"
+                        sh "docker rmi -f ${checkTag} || true"
+                        try {
+                            sh "docker build --pull --no-cache-filter runtime --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
+                            trivyScan(checkTag)
+                        } finally {
+                            sh "docker rmi -f ${checkTag} || true"
                         }
                     }
                 }
+            }
+        }
 
         stage('Docker: Build & Push') {
             when { branch 'main' }
@@ -119,8 +177,136 @@ pipeline {
             }
         }
 
+        // --------------------------------------------------------------- Frontend
+
+        stage('UI: Install') {
+            when { expression { env.RUN_UI == 'true' } }
+            steps {
+                dir('shelter-ui') {
+                    sh 'npm ci'
+                }
+            }
+        }
+
+        stage('UI: Lint') {
+            when { expression { env.RUN_UI == 'true' } }
+            steps {
+                dir('shelter-ui') {
+                    sh 'npm run lint'
+                }
+            }
+        }
+
+        stage('UI: Unit Tests & Coverage') {
+            when { expression { env.RUN_UI == 'true' } }
+            steps {
+                dir('shelter-ui') {
+                    sh 'npm run test:coverage'
+                }
+            }
+        }
+
+        // Trivy scans the finished image, but the npm packages are bundled into static files there,
+        // so dependency vulnerabilities are checked here. Same policy as Trivy: report HIGH and
+        // above, fail only on CRITICAL, and only for packages that ship to production.
+        stage('UI: Dependency Audit') {
+            when { expression { env.RUN_UI == 'true' } }
+            steps {
+                dir('shelter-ui') {
+                    sh 'npm audit --audit-level=high || true'
+                    sh 'npm audit --omit=dev --audit-level=critical'
+                }
+            }
+        }
+
+        stage('UI: Build') {
+            when { expression { env.RUN_UI == 'true' } }
+            steps {
+                dir('shelter-ui') {
+                    sh 'npm run build'
+                }
+            }
+        }
+
+        stage('UI: SonarQube Analysis') {
+            when { expression { env.RUN_UI == 'true' } }
+            steps {
+                dir('shelter-ui') {
+                    withSonarQubeEnv('sonar-server') {
+                        sh 'SONAR_TOKEN="$SONAR_AUTH_TOKEN" npx @sonar/scan'
+                    }
+                }
+            }
+        }
+
+        stage('UI: Quality Gate') {
+            when { expression { env.RUN_UI == 'true' } }
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('UI: Docker Build (verification)') {
+            when {
+                allOf {
+                    not { branch 'main' }
+                    expression { env.RUN_UI == 'true' }
+                }
+            }
+            steps {
+                dir('shelter-ui') {
+                    script {
+                        def checkTag = "shelter-ui:check-${env.GIT_COMMIT.take(7)}"
+                        sh "docker rmi -f ${checkTag} || true"
+                        try {
+                            sh "docker build --pull --no-cache-filter runtime --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
+                            trivyScan(checkTag)
+                        } finally {
+                            sh "docker rmi -f ${checkTag} || true"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('UI: Docker Build & Push') {
+            when { branch 'main' }
+            steps {
+                dir('shelter-ui') {
+                    script {
+                        def imageTag = "dario1338/shelter-ui:${env.GIT_COMMIT.take(7)}"
+                        sh "docker rmi -f ${imageTag} || true"
+                        try {
+                            sh "docker buildx build --pull --no-cache-filter runtime --platform linux/amd64 --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${imageTag} --load ."
+                            trivyScan(imageTag)
+
+                            withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                                try {
+                                    sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                                    sh "docker push ${imageTag}"
+                                } finally {
+                                    sh 'docker logout || true'
+                                }
+                            }
+                        } finally {
+                            sh "docker rmi -f ${imageTag} || true"
+                        }
+                    }
+                }
+            }
+        }
+
+        // ------------------------------------------------------------------ Proxy
+
         stage('Proxy: Build & verify config') {
-            when { not { branch 'main' } }
+            when {
+                allOf {
+                    not { branch 'main' }
+                    expression { env.RUN_PROXY == 'true' }
+                }
+            }
             steps {
                 dir('shelter-proxy') {
                     script {
