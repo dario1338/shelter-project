@@ -47,6 +47,12 @@ def useComponent(String name) {
 // Returns the "revision" field of a JSON file, or '' when the file is not JSON or has no usable
 // revision. A UI image built before version.json existed answers with the HTML entry page instead.
 def readRevision(String file) {
+    // JSON starts with "{"; the HTML entry page does not. Checked first so that no failing step is shown.
+    def looksLikeJson = sh(returnStatus: true, script: "head -c 1 '${file}' | grep -q '{'") == 0
+    if (!looksLikeJson) {
+        echo "${file} does not contain JSON"
+        return ''
+    }
     try {
         def revision = readJSON(file: file).revision
         if (!revision || revision.toString() in ['unknown', 'null']) {
@@ -54,7 +60,7 @@ def readRevision(String file) {
         }
         return revision.toString()
     } catch (e) {
-        echo "${file} does not contain JSON (${e.getMessage()})"
+        echo "${file} does not contain valid JSON (${e.getMessage()})"
         return ''
     }
 }
