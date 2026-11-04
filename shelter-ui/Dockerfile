@@ -14,5 +14,7 @@ ARG GIT_COMMIT=unknown
 LABEL org.opencontainers.image.revision=$GIT_COMMIT
 COPY default.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
+# The delivery pipeline reads this file to verify which commit a running instance serves
+RUN printf '{"revision":"%s"}\n' "$GIT_COMMIT" > /usr/share/nginx/html/version.json
 # Render sends traffic to port 10000 by default
 EXPOSE 10000
