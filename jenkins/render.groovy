@@ -1,7 +1,7 @@
-// Shared helpers for Jenkinsfile.cd and Jenkinsfile.rollback.
+// Shared helpers for Jenkinsfile.cd, Jenkinsfile.cd.ui and Jenkinsfile.rollback.
 // Loaded with `load 'jenkins/render.groovy'`; call init() once after loading.
 // All functions expect RENDER_KEY to be bound by the caller (withCredentials),
-// except resolveInstances(), which binds it itself.
+// except proxyEnvVar() and resolveInstances(), which bind it themselves.
 
 def init() {
     env.RENDER_API  = 'https://api.render.com/v1'
@@ -20,6 +20,43 @@ def init() {
     env.HEALTH_PATH    = '/api/health'    // answers 2xx once the instance is up
     env.REVISION_PATH  = '/api/info'      // JSON with the "revision" field
     env.SERVED_BY_PATH = '/api/health'    // path the proxy forwards to this component
+}
+
+// Selects the component the helpers act on. init() selects the API.
+// The UI is a static site without state, so it has one staging and one production service
+// (no blue/green pair); the proxy variable UI_UPSTREAM points to the production service.
+def useComponent(String name) {
+    if (name == 'api') {
+        init()
+    } else if (name == 'ui') {
+        env.IMAGE_REPO     = 'docker.io/dario1338/shelter-ui'
+        env.STAGING_ID     = 'srv-dbljg70u01pc73ad0hrg'
+        env.STAGING_URL    = 'https://shelter-ui-staging.onrender.com'
+        env.PROD_ID        = 'srv-dbljhdajnfac73875ah0'
+        env.PROD_HOST      = 'shelter-ui.onrender.com'
+        env.PROD_URL       = 'https://shelter-ui.onrender.com'
+        env.UPSTREAM_KEY   = 'UI_UPSTREAM'
+        env.HEALTH_PATH    = '/healthz'
+        env.REVISION_PATH  = '/version.json'
+        env.SERVED_BY_PATH = '/'
+    } else {
+        error "Unknown component '${name}'"
+    }
+}
+
+// Returns the "revision" field of a JSON file, or '' when the file is not JSON or has no usable
+// revision. A UI image built before version.json existed answers with the HTML entry page instead.
+def readRevision(String file) {
+    try {
+        def revision = readJSON(file: file).revision
+        if (!revision || revision.toString() in ['unknown', 'null']) {
+            return ''
+        }
+        return revision.toString()
+    } catch (e) {
+        echo "${file} does not contain JSON (${e.getMessage()})"
+        return ''
+    }
 }
 
 def startDeploy(String serviceId, String jsonBody) {
@@ -93,7 +130,7 @@ def probeHealthy(String baseUrl, int maxAttempts) {
 // Returns the full commit hash the service reports.
 // Returns '' only when the service clearly answers WITHOUT a usable revision:
 //   - 401/403/404: a version older than the revision endpoint (anonymous requests to unknown paths are denied)
-//   - the revision is 'unknown'
+//   - a body that is not JSON, or a revision that is 'unknown'
 // Any other outcome (timeout, 5xx, sleeping instance) is retried and then fails the build,
 // so a transient error is never mistaken for "no revision".
 def fetchRevision(String baseUrl) {
@@ -105,8 +142,7 @@ def fetchRevision(String baseUrl) {
             return ''
         }
         if (code ==~ /2\d\d/) {
-            def revision = readJSON(file: 'info-probe.json').revision
-            return (revision && revision != 'unknown') ? revision : ''
+            return readRevision('info-probe.json')
         }
         echo "Could not read the revision from ${baseUrl} (HTTP ${code}), attempt ${attempt} of 6"
         sleep 15
@@ -123,7 +159,7 @@ def verifyRevision(String baseUrl, String expected) {
                 echo "Service not responding yet (curl exit code ${code}), retrying"
                 return false
             }
-            def revision = readJSON(file: 'info.json').revision
+            def revision = readRevision('info.json')
             echo "Reported revision: ${revision}, expected: ${expected}"
             return revision == expected
         }
@@ -160,7 +196,7 @@ def proxyEnvVar(String key) {
 }
 
 // Looks up which instance the proxy is configured to use for the current component and sets
-// ACTIVE_HOST, IDLE_HOST and IDLE_ID.
+// ACTIVE_HOST, IDLE_HOST and IDLE_ID. Only for components with a blue/green pair (the API).
 // The configuration is read from the Render API, not from the responses of the running services:
 // a free-tier instance that sleeps answers the proxy with 502 for up to two minutes, and the release
 // used to fail on that before it had even started. The configured value is the one setUpstream changes,
@@ -209,7 +245,7 @@ def verifyThroughProxy(String expectedHost, String expectedRevision) {
                 echo "Proxy not answering correctly yet (curl exit code ${code}), retrying"
                 return false
             }
-            def revision = readJSON(file: 'info.json').revision
+            def revision = readRevision('info.json')
             def host = sh(returnStdout: true, script: "grep -i '^x-served-by:' headers.txt | head -1 | awk '{print \$2}' | tr -d '\\r' || true").trim()
             echo "Proxy reports revision ${revision} served by ${host}; expected ${expectedRevision} on ${expectedHost}"
             return revision == expectedRevision && host == expectedHost
@@ -226,6 +262,15 @@ def verifyServedBy(String expectedHost) {
             return host == expectedHost
         }
     }
+}
+
+// Smoke test of the static UI: health endpoint, the entry page and a client-side route
+// (the single-page-app fallback must answer unknown paths with the entry page).
+def smokeUi(String baseUrl) {
+    sh "curl -sS -f --max-time 60 '${baseUrl}/healthz' | grep -qx ok"
+    sh "curl -sS -f --max-time 60 '${baseUrl}/' | grep -q 'id=\"root\"'"
+    sh "curl -sS -f --max-time 60 '${baseUrl}/some/client/route' | grep -q 'id=\"root\"'"
+    echo "UI smoke tests passed for ${baseUrl}"
 }
 
 return this
