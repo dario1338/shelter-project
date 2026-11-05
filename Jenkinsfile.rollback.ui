@@ -1,0 +1,108 @@
+def render
+
+// Manual rollback of the production UI to an older image of shelter-ui.
+// The UI has one production service, so a rollback is a deploy of the older image followed by the same
+// verification as a release. If that fails, the version that was running before is deployed again.
+pipeline {
+    // No pipeline-wide agent: only the parts that do work allocate one,
+    // so the manual approval does not hold an executor while it waits.
+    agent none
+
+    parameters {
+        string(name: 'TARGET_TAG', defaultValue: '',
+               description: 'REQUIRED: 7-character image tag of shelter-ui on Docker Hub to roll production back to')
+    }
+
+    options {
+        disableConcurrentBuilds()
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Prepare') {
+            agent { label 'docker' }
+            steps {
+                checkout scm
+                script {
+                    render = load 'jenkins/render.groovy'
+                    render.init()
+                    render.useComponent('ui')
+
+                    def tag = (params.TARGET_TAG ?: '').trim()
+                    if (!(tag ==~ /^[0-9a-f]{7}$/)) {
+                        error "TARGET_TAG must be a 7-character lowercase hex tag, got: '${tag}'"
+                    }
+                    env.TARGET_TAG_CLEAN = tag
+
+                    // Also wakes up the service if it sleeps. '' means the running image predates version.json.
+                    env.CURRENT_REVISION = render.fetchRevision(env.PROD_URL) ?: 'unknown'
+                    echo "Production UI revision: ${env.CURRENT_REVISION}"
+                    if (env.CURRENT_REVISION.startsWith(tag)) {
+                        error "Production already runs ${tag}, nothing to roll back"
+                    }
+                }
+            }
+        }
+
+        // No agent here on purpose: waiting for a human must not occupy an executor.
+        stage('Approval') {
+            steps {
+                script {
+                    def shown = env.CURRENT_REVISION.length() == 40 ? env.CURRENT_REVISION.take(7) : env.CURRENT_REVISION
+                    timeout(time: 30, unit: 'MINUTES') {
+                        input message: "Roll back the production UI from ${shown} to ${env.TARGET_TAG_CLEAN}?",
+                              ok: 'Roll back'
+                    }
+                }
+            }
+        }
+
+        // Only one job at a time may change production. The lock is taken after the approval so that
+        // a waiting rollback never blocks a release.
+        stage('Execute rollback') {
+            agent { label 'docker' }
+            options {
+                lock('shelter-production')
+            }
+            steps {
+                withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
+                    script {
+                        def tag = env.TARGET_TAG_CLEAN
+                        try {
+                            def deployId = render.deployImage(env.PROD_ID, "${env.IMAGE_REPO}:${tag}")
+                            render.waitForDeploy(env.PROD_ID, deployId)
+
+                            def revision = render.fetchRevision(env.PROD_URL)
+                            if (revision && !revision.startsWith(tag)) {
+                                error "The production UI reports revision ${revision}, expected an image tagged ${tag}"
+                            }
+                            if (!revision) {
+                                echo 'WARNING: the target version does not report a revision (it predates version.json). Only the smoke tests and the routing are verified.'
+                            }
+                            render.smokeUi(env.PROD_URL)
+
+                            render.verifyServedBy(env.PROD_HOST)
+                            if (revision) {
+                                render.verifyThroughProxy(env.PROD_HOST, revision)
+                            }
+                            render.smokeUi(env.PROXY_URL)
+                            echo "Production UI now runs ${revision ?: tag}"
+                        } catch (e) {
+                            echo "Verification after the rollback failed (${e.getMessage()})."
+                            if (env.CURRENT_REVISION != 'unknown') {
+                                def previousImage = "${env.IMAGE_REPO}:${env.CURRENT_REVISION.take(7)}"
+                                echo "Restoring ${previousImage}"
+                                def deployId = render.deployImage(env.PROD_ID, previousImage)
+                                render.waitForDeploy(env.PROD_ID, deployId)
+                                render.verifyRevision(env.PROD_URL, env.CURRENT_REVISION)
+                            } else {
+                                echo 'WARNING: the version that was running before is unknown, so it was not restored.'
+                            }
+                            error "Rollback failed: ${e.getMessage()}"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

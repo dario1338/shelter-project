@@ -5,24 +5,36 @@ def trivyScan(String image) {
     sh "trivy image --no-progress --timeout 15m --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 ${image}"
 }
 
-// Decide which components a pull request touches. Anything that cannot be determined (branch
-// build, git failure) or that changes the pipeline itself selects every component, so a check
-// is never skipped by mistake. The branch name is read from the environment inside the shell
-// script, never interpolated into it.
+// Decide which components a build has to cover.
+//  - Pull request: files changed compared to the target branch. A change of the pipeline itself
+//    (this file, jenkins/) selects every component, so the change is verified on all of them.
+//  - Branch build (main): files changed since the last successful build of this branch, so a failed
+//    build never hides changes. Pipeline files are ignored: they were verified in the pull request.
+// Anything that cannot be determined (no previous build, git failure) selects every component, so a
+// check is never skipped by mistake. Branch names and hashes are read from the environment inside
+// the shell script, never interpolated into it.
 def detectChangedComponents() {
     def everything = [api: true, ui: true, proxy: true]
-    if (!env.CHANGE_TARGET) {
+    def pullRequest = env.CHANGE_TARGET != null
+    def diff
+    if (pullRequest) {
+        sh 'git fetch --no-tags origin "+refs/heads/${CHANGE_TARGET}:refs/remotes/origin/${CHANGE_TARGET}" || true'
+        diff = 'git diff --name-only "origin/${CHANGE_TARGET}...HEAD" > .changed-files'
+    } else if (env.GIT_PREVIOUS_SUCCESSFUL_COMMIT) {
+        echo "Comparing with the last successful build: ${env.GIT_PREVIOUS_SUCCESSFUL_COMMIT}"
+        diff = 'git diff --name-only "${GIT_PREVIOUS_SUCCESSFUL_COMMIT}" HEAD > .changed-files'
+    } else {
+        echo 'There is no previous successful build to compare with, building every component.'
         return everything
     }
-    sh 'git fetch --no-tags origin "+refs/heads/${CHANGE_TARGET}:refs/remotes/origin/${CHANGE_TARGET}" || true'
-    def status = sh(returnStatus: true, script: 'git diff --name-only "origin/${CHANGE_TARGET}...HEAD" > .changed-files')
+    def status = sh(returnStatus: true, script: diff)
     if (status != 0) {
         echo 'Could not determine the changed files, building every component.'
         return everything
     }
     def changed = [api: false, ui: false, proxy: false]
     for (String file : readFile('.changed-files').readLines()) {
-        if (file == 'Jenkinsfile.ci' || file.startsWith('jenkins/')) {
+        if (pullRequest && (file == 'Jenkinsfile.ci' || file.startsWith('jenkins/'))) {
             return everything
         } else if (file.startsWith('shelter-api/')) {
             changed.api = true
@@ -150,7 +162,12 @@ pipeline {
         }
 
         stage('Docker: Build & Push') {
-            when { branch 'main' }
+            when {
+                allOf {
+                    branch 'main'
+                    expression { env.RUN_API == 'true' }
+                }
+            }
             steps {
                 dir('shelter-api') {
                     script {
@@ -272,7 +289,12 @@ pipeline {
         }
 
         stage('UI: Docker Build & Push') {
-            when { branch 'main' }
+            when {
+                allOf {
+                    branch 'main'
+                    expression { env.RUN_UI == 'true' }
+                }
+            }
             steps {
                 dir('shelter-ui') {
                     script {
@@ -325,7 +347,12 @@ pipeline {
         }
 
         stage('Proxy: Build & Push') {
-            when { branch 'main' }
+            when {
+                allOf {
+                    branch 'main'
+                    expression { env.RUN_PROXY == 'true' }
+                }
+            }
             steps {
                 dir('shelter-proxy') {
                     script {
@@ -351,12 +378,33 @@ pipeline {
             }
         }
 
-        // Continuous Delivery: hand the freshly published image over to the delivery pipeline.
-        // wait: false, so this build does not hold an executor while shelter-cd waits for the approval.
-        stage('Trigger delivery') {
-            when { branch 'main' }
+        // ---------------------------------------------------------------- Delivery
+        // Continuous Delivery: hand every freshly published image over to the delivery pipeline of its
+        // component. wait: false, so this build does not hold an executor while the delivery waits for
+        // the approval. The proxy has no delivery pipeline yet.
+        stage('Trigger API delivery') {
+            when {
+                allOf {
+                    branch 'main'
+                    expression { env.RUN_API == 'true' }
+                }
+            }
             steps {
                 build job: '/shelter-cd',
+                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT)],
+                      wait: false
+            }
+        }
+
+        stage('Trigger UI delivery') {
+            when {
+                allOf {
+                    branch 'main'
+                    expression { env.RUN_UI == 'true' }
+                }
+            }
+            steps {
+                build job: '/shelter-cd-ui',
                       parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT)],
                       wait: false
             }
