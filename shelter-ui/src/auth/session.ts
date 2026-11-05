@@ -7,6 +7,13 @@ interface TokenResponse {
   accessToken: string
 }
 
+export interface RegistrationData {
+  email: string
+  password: string
+  firstName: string
+  lastName: string
+}
+
 // Requests are same-origin (the browser reaches the API through shelter-proxy), so the default
 // fetch credentials mode already sends the HttpOnly refresh cookie to /api/auth.
 
@@ -21,6 +28,18 @@ export async function login(email: string, password: string): Promise<void> {
   }
   const body = (await response.json()) as TokenResponse
   setAccessToken(body.accessToken)
+}
+
+// Creates the account only. The server does not sign the new user in, so the caller does that.
+export async function register(data: RegistrationData): Promise<void> {
+  const response = await fetch(`${AUTH_BASE}/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
 }
 
 let refreshInFlight: Promise<boolean> | null = null
