@@ -1,3 +1,4 @@
+import { Heading, Stack, Text } from "@chakra-ui/react";
 import type { AuthState } from "../auth/AuthContext";
 import { useAuth } from "../auth/useAuth";
 
@@ -15,9 +16,11 @@ function describe(state: AuthState): string {
 export default function HomePage() {
   const { state } = useAuth();
   return (
-    <main>
-      <h1>Shelter</h1>
-      <p>{describe(state)}</p>
-    </main>
+    <Stack gap="4">
+      <Heading as="h1" size="2xl">
+        Shelter
+      </Heading>
+      <Text>{describe(state)}</Text>
+    </Stack>
   );
 }
