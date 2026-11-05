@@ -40,11 +40,13 @@ async function isHealthy(signal: AbortSignal): Promise<boolean> {
 // four minutes or the caller aborted. The first request is also what wakes a sleeping instance.
 export async function waitForApi(signal: AbortSignal): Promise<boolean> {
   const deadline = Date.now() + GIVE_UP_AFTER_MS
-  for (let attempt = 0; !signal.aborted && Date.now() < deadline; attempt++) {
+  let attempt = 0
+  while (!signal.aborted && Date.now() < deadline) {
     if (await isHealthy(signal)) {
       return true
     }
     await pause(RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)], signal)
+    attempt++
   }
   return false
 }
