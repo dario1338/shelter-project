@@ -1,3 +1,5 @@
+import { wakeInstance } from './wakeInstance'
+
 const HEALTH_PATH = '/api/health'
 
 // Free instances sleep when idle and need about two minutes to wake up. Until then the hosting
@@ -37,8 +39,13 @@ async function isHealthy(signal: AbortSignal): Promise<boolean> {
 }
 
 // Resolves true as soon as the API answers its health endpoint, or false when it did not within
-// four minutes or the caller aborted. The first request is also what wakes a sleeping instance.
+// four minutes after the wake-up request or the caller aborted. When the first check fails the instance is asleep, so it is
+// woken up directly from the browser (see wakeInstance) before the checks through the proxy go on.
 export async function waitForApi(signal: AbortSignal): Promise<boolean> {
+  if (await isHealthy(signal)) {
+    return true
+  }
+  await wakeInstance(signal)
   const deadline = Date.now() + GIVE_UP_AFTER_MS
   let attempt = 0
   while (!signal.aborted && Date.now() < deadline) {
