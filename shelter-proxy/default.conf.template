@@ -18,6 +18,16 @@ server {
         return 200 'ok';
     }
 
+    # Name of the API instance that currently receives the traffic (blue or green). The browser uses it
+    # to wake that instance up directly: the platform does not wake a sleeping free instance for
+    # requests that come from another service, such as this proxy, but it does for requests from outside.
+    location = /api-host {
+        access_log off;
+        default_type text/plain;
+        add_header Cache-Control 'no-store' always;
+        return 200 '${API_UPSTREAM}';
+    }
+
     # API traffic
     location ^~ /api/ {
         proxy_pass https://${API_UPSTREAM};
