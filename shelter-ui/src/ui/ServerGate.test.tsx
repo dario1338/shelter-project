@@ -37,9 +37,22 @@ describe('ServerGate', () => {
   })
 
   it('shows nothing during the first moments, then the waiting screen, then the application', async () => {
-    fetchMock
-      .mockResolvedValueOnce(new Response('Too Many Requests', { status: 429 }))
-      .mockResolvedValue(new Response('{}', { status: 200 }))
+    let awake = false
+    fetchMock.mockImplementation((input) => {
+      if (input === '/api-host') {
+        return Promise.resolve(new Response('shelter-api-green.onrender.com', { status: 200 }))
+      }
+      if (input === '/api/health') {
+        return Promise.resolve(new Response(awake ? '{}' : 'Too Many Requests', { status: awake ? 200 : 429 }))
+      }
+      // The direct wake-up request: the platform holds it for a while and then the instance is up.
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          awake = true
+          resolve(new Response('', { status: 200 }))
+        }, 2000)
+      })
+    })
 
     renderGate()
     expect(screen.queryByText(/waking up/i)).not.toBeInTheDocument()
