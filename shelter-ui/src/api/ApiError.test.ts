@@ -34,6 +34,18 @@ describe('errorMessage', () => {
     )
   })
 
+  it('explains a platform 429 that has no ProblemDetail body', () => {
+    expect(errorMessage(new ApiError(429, 'Request failed with status 429'))).toBe(
+      'Too many requests right now, or the service is waking up. Please wait a minute and try again.',
+    )
+  })
+
+  it('shows the message of a 429 sent by the API itself', () => {
+    expect(errorMessage(new ApiError(429, 'Too many failed attempts. Try again later.'))).toBe(
+      'Too many failed attempts. Try again later.',
+    )
+  })
+
   it('does not leak the text of an unexpected error', () => {
     expect(errorMessage(new TypeError('Failed to fetch'))).toBe(
       'Something went wrong. Please check your connection and try again.',

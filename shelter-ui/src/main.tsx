@@ -5,16 +5,19 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./auth/AuthProvider";
 import { ColorModeProvider } from "./ui/ColorModeProvider";
+import { ServerGate } from "./ui/ServerGate";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ChakraProvider value={defaultSystem}>
       <ColorModeProvider>
-        <BrowserRouter>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </BrowserRouter>
+        <ServerGate>
+          <BrowserRouter>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </BrowserRouter>
+        </ServerGate>
       </ColorModeProvider>
     </ChakraProvider>
   </StrictMode>,
