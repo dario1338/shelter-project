@@ -27,9 +27,15 @@ const UNAVAILABLE_STATUSES = new Set([502, 503, 504])
 // The text shown to the user for any failed call.
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    return UNAVAILABLE_STATUSES.has(error.status)
-      ? 'The service is temporarily unavailable. Please try again in a minute.'
-      : error.message
+    if (UNAVAILABLE_STATUSES.has(error.status)) {
+      return 'The service is temporarily unavailable. Please try again in a minute.'
+    }
+    // The hosting platform answers 429 with a plain text body while a sleeping instance is being
+    // woken up. Our own API sends a ProblemDetail, whose message is shown as it is.
+    if (error.status === 429 && error.message === 'Request failed with status 429') {
+      return 'Too many requests right now, or the service is waking up. Please wait a minute and try again.'
+    }
+    return error.message
   }
   return 'Something went wrong. Please check your connection and try again.'
 }
