@@ -99,12 +99,13 @@ class DogCareServiceTest {
         verify(careRepository, never()).findById(any());
     }
 
-    @Test
+        @Test
     void unknownDogIsNotFound() {
         when(dogRepository.existsById(DOG)).thenReturn(false);
+        CareRequest request = request(null);
 
         assertThrows(ResourceNotFoundException.class, () -> careService.getCare(DOG, ANA, true));
-        assertThrows(ResourceNotFoundException.class, () -> careService.updateCare(DOG, request(null)));
+        assertThrows(ResourceNotFoundException.class, () -> careService.updateCare(DOG, request));
     }
 
     @Test
