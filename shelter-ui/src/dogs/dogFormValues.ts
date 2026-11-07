@@ -64,7 +64,7 @@ export function hasErrors(errors: object): boolean {
 
 function textOrNull(text: string): string | null {
   const trimmed = text.trim()
-  return trimmed ? trimmed : null
+    return trimmed || null
 }
 
 export function toDogInput(values: DogFormValues): DogInput {

@@ -112,7 +112,7 @@ export function careHasErrors(errors: CareFormErrors): boolean {
 
 function textOrNull(text: string): string | null {
   const trimmed = text.trim()
-  return trimmed ? trimmed : null
+    return trimmed || null
 }
 
 export function toCareInput(values: CareFormValues): CareInput {
