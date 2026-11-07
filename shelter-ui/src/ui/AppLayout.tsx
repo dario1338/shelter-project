@@ -33,6 +33,11 @@ function AccountLinks() {
   }
   return (
     <>
+      {state.user.role === 'USER' && (
+        <Button asChild variant="ghost" size="sm">
+          <RouterLink to="/applications">My applications</RouterLink>
+        </Button>
+      )}
       <Text fontSize="sm">{state.user.firstName}</Text>
       <Button variant="outline" size="sm" onClick={() => void signOut().catch(() => undefined)}>
         Sign out

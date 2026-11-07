@@ -4,6 +4,7 @@ import { ApiError, errorMessage } from '../api/ApiError'
 import { DogImage } from '../dogs/DogImage'
 import { dogAge, parseDogId } from '../dogs/format'
 import { listSearchFrom } from '../dogs/listSearch'
+import { SponsorshipSection } from '../sponsorships/ApplyForm'
 import { StatusBadge } from '../dogs/StatusBadge'
 import { useDog } from '../dogs/useDogs'
 import { ErrorAlert } from '../ui/ErrorAlert'
@@ -89,6 +90,7 @@ export default function DogDetailsPage() {
               )}
             </Box>
             {dog.data.description && <Text whiteSpace="pre-wrap">{dog.data.description}</Text>}
+            <SponsorshipSection dog={dog.data} />
           </Stack>
         </SimpleGrid>
       )}

@@ -1,7 +1,9 @@
 import { Route, Routes } from "react-router-dom";
+import RequireAuth from "./auth/RequireAuth";
 import DogDetailsPage from "./pages/DogDetailsPage";
 import DogsPage from "./pages/DogsPage";
 import HomePage from "./pages/HomePage";
+import MyApplicationsPage from "./pages/MyApplicationsPage";
 import LoginPage from "./pages/LoginPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -16,6 +18,9 @@ export default function App() {
         <Route path="/dogs/:id" element={<DogDetailsPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route element={<RequireAuth role="USER" />}>
+          <Route path="/applications" element={<MyApplicationsPage />} />
+        </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
