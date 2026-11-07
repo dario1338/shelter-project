@@ -29,7 +29,7 @@ export function writeListView({ page, status }: ListView): URLSearchParams {
 }
 
 export function isDogStatus(value: string): value is DogStatus {
-  return STATUSES.some((candidate) => candidate === value)
+     return (STATUSES as readonly string[]).includes(value)
 }
 
 // The query string the list had when the user opened a dog, or '' when they came another way.
