@@ -1,6 +1,8 @@
 import { Box, Button, Heading, Link, SimpleGrid, Skeleton, Stack, Text } from '@chakra-ui/react'
 import { Link as RouterLink, useLocation, useParams } from 'react-router-dom'
 import { ApiError, errorMessage } from '../api/ApiError'
+import { useAuth } from '../auth/useAuth'
+import { CareSection } from '../care/CareSection'
 import { DogImage } from '../dogs/DogImage'
 import { dogAge, parseDogId } from '../dogs/format'
 import { listSearchFrom } from '../dogs/listSearch'
@@ -27,6 +29,8 @@ export default function DogDetailsPage() {
   const id = parseDogId(useParams().id)
   const backTo = `/dogs${listSearchFrom(useLocation().state)}`
   const dog = useDog(id)
+  const { state } = useAuth()
+  const admin = state.status === 'authenticated' && state.user.role === 'ADMIN'
 
   if (id === null || (dog.error instanceof ApiError && dog.error.status === 404)) {
     return <NotFound backTo={backTo} />
@@ -91,9 +95,16 @@ export default function DogDetailsPage() {
             </Box>
             {dog.data.description && <Text whiteSpace="pre-wrap">{dog.data.description}</Text>}
             <SponsorshipSection dog={dog.data} />
+            {admin && (
+              <Button asChild variant="outline" size="sm">
+                <RouterLink to={`/admin/dogs/${dog.data.id}/edit`}>Edit dog</RouterLink>
+              </Button>
+            )}
           </Stack>
         </SimpleGrid>
       )}
+
+      {dog.data && <CareSection dogId={dog.data.id} />}
     </Stack>
   )
 }

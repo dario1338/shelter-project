@@ -1,5 +1,6 @@
-import { Button, Flex, Heading, SimpleGrid, Skeleton, Stack, Text } from '@chakra-ui/react'
-import { useSearchParams } from 'react-router-dom'
+import { Button, Flex, Heading, HStack, SimpleGrid, Skeleton, Stack, Text } from '@chakra-ui/react'
+import { Link as RouterLink, useSearchParams } from 'react-router-dom'
+import { useAuth } from '../auth/useAuth'
 import { errorMessage } from '../api/ApiError'
 import { DogCard } from '../dogs/DogCard'
 import { emptyListMessage } from '../dogs/format'
@@ -29,6 +30,7 @@ function DogSkeletons() {
 
 export default function DogsPage() {
   const [search, setSearch] = useSearchParams()
+  const { state } = useAuth()
   const view = readListView(search)
   const dogs = useDogs({ page: view.page - 1, status: view.status })
 
@@ -41,7 +43,14 @@ export default function DogsPage() {
         <Heading as="h1" size="2xl">
           Dogs
         </Heading>
-        <StatusFilter value={view.status} onChange={(status) => show({ page: 1, status })} />
+        <HStack gap="4" align="end" wrap="wrap">
+          {state.status === 'authenticated' && state.user.role === 'ADMIN' && (
+            <Button asChild>
+              <RouterLink to="/admin/dogs/new">Add dog</RouterLink>
+            </Button>
+          )}
+          <StatusFilter value={view.status} onChange={(status) => show({ page: 1, status })} />
+        </HStack>
       </Flex>
 
       {dogs.isError && (
