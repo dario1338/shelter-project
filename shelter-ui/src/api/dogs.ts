@@ -60,3 +60,40 @@ export async function fetchDog(id: number, signal?: AbortSignal): Promise<Dog> {
   }
   return (await response.json()) as Dog
 }
+
+// What the API accepts for a dog. An update replaces all of it, so a missing value must be sent as null.
+export interface DogInput {
+  name: string
+  breed: string | null
+  birthYear: number | null
+  description: string | null
+  status: DogStatus
+}
+
+async function sendDog(path: string, method: 'POST' | 'PUT', input: DogInput): Promise<Dog> {
+  const response = await apiFetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+  return (await response.json()) as Dog
+}
+
+export function createDog(input: DogInput): Promise<Dog> {
+  return sendDog('/api/dogs', 'POST', input)
+}
+
+export function updateDog(id: number, input: DogInput): Promise<Dog> {
+  return sendDog(`/api/dogs/${id}`, 'PUT', input)
+}
+
+// The API also removes the applications and the care details of the dog.
+export async function deleteDog(id: number): Promise<void> {
+  const response = await apiFetch(`/api/dogs/${id}`, { method: 'DELETE' })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+}

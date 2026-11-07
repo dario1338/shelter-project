@@ -34,9 +34,14 @@ function AccountLinks() {
   return (
     <>
       {state.user.role === 'USER' && (
-        <Button asChild variant="ghost" size="sm">
-          <RouterLink to="/applications">My applications</RouterLink>
-        </Button>
+        <>
+          <Button asChild variant="ghost" size="sm">
+            <RouterLink to="/my-dogs">My dogs</RouterLink>
+          </Button>
+          <Button asChild variant="ghost" size="sm">
+            <RouterLink to="/applications">My applications</RouterLink>
+          </Button>
+        </>
       )}
       {state.user.role === 'ADMIN' && (
         <Button asChild variant="ghost" size="sm">

@@ -13,6 +13,8 @@ const fetchMock = setUpFetchMock()
 
 function open(dogData: Dog, user: CurrentUser | null, extra: Record<string, () => Response> = {}) {
   routeFetch(fetchMock, {
+    // Listed before '/api/dogs/7', which is a prefix of it.
+    '/api/dogs/7/care': () => jsonResponse(200, { sterilized: null, microchipNumber: null, healthNotes: null, internalNote: null, vaccinations: [], updatedAt: null }),
     '/api/dogs/7': () => jsonResponse(200, dogData),
     // Nothing pending, unless a test says otherwise. Listed before '/api/sponsorships', which is a prefix of it.
     '/api/sponsorships/me': () => jsonResponse(200, applicationPage([])),
@@ -28,8 +30,9 @@ describe('SponsorshipSection', () => {
   it('invites a visitor to sign in and returns to the dog afterwards', async () => {
     open(dog({ id: 7 }), null)
 
-    const link = await screen.findByRole('link', { name: 'Sign in' })
-    fireEvent.click(link)
+    // The header has a link of the same name, so the one in the page is found through its text.
+    const prompt = await screen.findByText(/to apply for sponsorship of this dog/)
+    fireEvent.click(within(prompt).getByRole('link', { name: 'Sign in' }))
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
   })
 
