@@ -1,6 +1,6 @@
 import { fireEvent, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { application } from '../test/applications'
+import { application, applicationPage } from '../test/applications'
 import { dog } from '../test/dogs'
 import { setUpFetchMock } from '../test/fetchMock'
 import { jsonResponse, routeFetch } from '../test/http'
@@ -14,6 +14,8 @@ const fetchMock = setUpFetchMock()
 function open(dogData: Dog, user: CurrentUser | null, extra: Record<string, () => Response> = {}) {
   routeFetch(fetchMock, {
     '/api/dogs/7': () => jsonResponse(200, dogData),
+    // Nothing pending, unless a test says otherwise. Listed before '/api/sponsorships', which is a prefix of it.
+    '/api/sponsorships/me': () => jsonResponse(200, applicationPage([])),
     ...(user
       ? { '/api/auth/refresh': () => jsonResponse(200, { accessToken: 't1' }), '/api/auth/me': () => jsonResponse(200, user) }
       : {}),
@@ -43,6 +45,33 @@ describe('SponsorshipSection', () => {
     expect(within(screen.getByRole('status')).getByRole('link', { name: 'My applications' })).toHaveAttribute('href', '/applications')
     const post = fetchMock.mock.calls.find(([url]) => String(url) === '/api/sponsorships')
     expect(JSON.parse(post![1]?.body as string)).toEqual({ dogId: 7, note: 'I would love to' })
+  })
+
+  it('asks only for the pending applications of this dog', async () => {
+    open(dog({ id: 7 }), ana)
+
+    await screen.findByRole('button', { name: 'Apply for sponsorship' })
+
+    const urls = fetchMock.mock.calls.map(([url]) => String(url))
+    expect(urls).toContain('/api/sponsorships/me?page=0&size=1&dogId=7&status=PENDING')
+  })
+
+  it('does not show the form when an application is already pending', async () => {
+    open(dog({ id: 7 }), ana, {
+      '/api/sponsorships/me': () => jsonResponse(200, applicationPage([application()])),
+    })
+
+    expect(await screen.findByText('You have already applied for this dog.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Apply for sponsorship' })).not.toBeInTheDocument()
+    expect(within(screen.getByText('The shelter has not decided yet.').parentElement!).getByRole('link', { name: 'My applications' })).toHaveAttribute('href', '/applications')
+  })
+
+  it('shows the form when the check itself fails, because the API decides', async () => {
+    open(dog({ id: 7 }), ana, {
+      '/api/sponsorships/me': () => jsonResponse(400, { detail: 'Bad request' }),
+    })
+
+    expect(await screen.findByRole('button', { name: 'Apply for sponsorship' })).toBeInTheDocument()
   })
 
   it('shows what the API says when the application is refused', async () => {
