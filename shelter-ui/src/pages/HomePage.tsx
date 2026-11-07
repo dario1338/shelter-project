@@ -1,4 +1,5 @@
-import { Heading, Stack, Text } from "@chakra-ui/react";
+import { Button, Heading, Stack, Text } from "@chakra-ui/react";
+import { Link as RouterLink } from "react-router-dom";
 import type { AuthState } from "../auth/AuthContext";
 import { useAuth } from "../auth/useAuth";
 
@@ -21,6 +22,9 @@ export default function HomePage() {
         Shelter
       </Heading>
       <Text>{describe(state)}</Text>
+      <Button asChild alignSelf="start">
+        <RouterLink to="/dogs">Browse dogs</RouterLink>
+      </Button>
     </Stack>
   );
 }
