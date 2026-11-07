@@ -1,0 +1,84 @@
+import { Button, Flex, Heading, SimpleGrid, Skeleton, Stack, Text } from '@chakra-ui/react'
+import { useSearchParams } from 'react-router-dom'
+import { errorMessage } from '../api/ApiError'
+import { DogCard } from '../dogs/DogCard'
+import { emptyListMessage } from '../dogs/format'
+import { readListView, writeListView, type ListView } from '../dogs/listSearch'
+import { PageControls } from '../dogs/PageControls'
+import { StatusFilter } from '../dogs/StatusFilter'
+import { useDogs } from '../dogs/useDogs'
+import { ErrorAlert } from '../ui/ErrorAlert'
+
+const GRID_COLUMNS = { base: 1, sm: 2, md: 3 }
+
+// Fixed names, so that the placeholders have stable keys.
+const SKELETON_KEYS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l']
+
+function DogSkeletons() {
+  return (
+    <SimpleGrid columns={GRID_COLUMNS} gap="6" aria-busy="true">
+      <Text role="status" srOnly>
+        Loading dogs…
+      </Text>
+      {SKELETON_KEYS.map((key) => (
+        <Skeleton key={key} h="64" borderRadius="md" />
+      ))}
+    </SimpleGrid>
+  )
+}
+
+export default function DogsPage() {
+  const [search, setSearch] = useSearchParams()
+  const view = readListView(search)
+  const dogs = useDogs({ page: view.page - 1, status: view.status })
+
+  const show = (next: ListView) => setSearch(writeListView(next))
+  const content = dogs.data?.content
+
+  return (
+    <Stack gap="6">
+      <Flex align="end" justify="space-between" gap="4" wrap="wrap">
+        <Heading as="h1" size="2xl">
+          Dogs
+        </Heading>
+        <StatusFilter value={view.status} onChange={(status) => show({ page: 1, status })} />
+      </Flex>
+
+      {dogs.isError && (
+        <Stack gap="3" align="start">
+          <ErrorAlert message={errorMessage(dogs.error)} />
+          <Button variant="outline" onClick={() => void dogs.refetch()}>
+            Try again
+          </Button>
+        </Stack>
+      )}
+
+      {dogs.isPending && <DogSkeletons />}
+
+      {content && content.length > 0 && (
+        <SimpleGrid columns={GRID_COLUMNS} gap="6">
+          {content.map((dog) => (
+            <DogCard key={dog.id} dog={dog} />
+          ))}
+        </SimpleGrid>
+      )}
+
+      {content?.length === 0 && (
+        <Stack gap="3" align="start">
+          <Text>{emptyListMessage(view.page, view.status)}</Text>
+          {view.page > 1 && (
+            <Button variant="outline" onClick={() => show({ ...view, page: 1 })}>
+              Go to the first page
+            </Button>
+          )}
+        </Stack>
+      )}
+
+      <PageControls
+        page={view.page}
+        totalPages={dogs.data?.page.totalPages ?? 0}
+        onChange={(page) => show({ ...view, page })}
+      />
+    </Stack>
+  )
+}

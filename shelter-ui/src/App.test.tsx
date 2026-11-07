@@ -35,6 +35,16 @@ describe("App", () => {
     ).toHaveAttribute("href", "/register");
   });
 
+  it("links to the dogs from the header and the home page", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 401 }));
+
+    renderApp();
+    await screen.findByText("You are not signed in.");
+
+    expect(screen.getByRole("link", { name: "Dogs" })).toHaveAttribute("href", "/dogs");
+    expect(screen.getByRole("link", { name: "Browse dogs" })).toHaveAttribute("href", "/dogs");
+  });
+
   it("restores the session from the refresh cookie", async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { accessToken: "t1" }))

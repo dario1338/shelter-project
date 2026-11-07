@@ -46,10 +46,15 @@ export default function AppLayout() {
     <Box minH="100vh">
       <Box as="header" borderBottomWidth="1px">
         <Container maxW="5xl">
-          <Flex align="center" justify="space-between" py="3" gap="4">
-            <Link asChild fontWeight="bold" fontSize="lg">
-              <RouterLink to="/">Shelter</RouterLink>
-            </Link>
+          <Flex align="center" justify="space-between" py="3" columnGap="4" rowGap="2" wrap="wrap">
+            <HStack gap="6">
+              <Link asChild fontWeight="bold" fontSize="lg">
+                <RouterLink to="/">Shelter</RouterLink>
+              </Link>
+              <Link asChild>
+                <RouterLink to="/dogs">Dogs</RouterLink>
+              </Link>
+            </HStack>
             <HStack gap="2">
               <ColorModeToggle />
               <AccountLinks />
