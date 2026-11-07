@@ -1,12 +1,28 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { applyForSponsorship, cancelApplication, fetchMyApplications } from '../api/sponsorships'
+import {
+  applyForSponsorship,
+  cancelApplication,
+  decideApplication,
+  fetchApplications,
+  fetchMyApplications,
+  type ApplicationListParams,
+  type Decision,
+  type MyApplicationsParams,
+} from '../api/sponsorships'
 
-export function useMyApplications(page: number, enabled: boolean) {
+export function useMyApplications(params: MyApplicationsParams) {
   return useQuery({
-    queryKey: ['sponsorships', 'me', page],
-    queryFn: ({ signal }) => fetchMyApplications(page, signal),
+    queryKey: ['sponsorships', 'me', params],
+    queryFn: ({ signal }) => fetchMyApplications(params, signal),
     placeholderData: keepPreviousData,
-    enabled,
+  })
+}
+
+export function useApplications(params: ApplicationListParams) {
+  return useQuery({
+    queryKey: ['sponsorships', 'all', params],
+    queryFn: ({ signal }) => fetchApplications(params, signal),
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -34,6 +50,15 @@ export function useCancelApplication() {
   const refresh = useRefreshAfterChange()
   return useMutation({
     mutationFn: (id: number) => cancelApplication(id),
+    onSettled: refresh,
+  })
+}
+
+export function useDecideApplication() {
+  const refresh = useRefreshAfterChange()
+  return useMutation({
+    mutationFn: ({ id, decision, adminNote }: { id: number; decision: Decision; adminNote: string }) =>
+      decideApplication(id, decision, adminNote),
     onSettled: refresh,
   })
 }

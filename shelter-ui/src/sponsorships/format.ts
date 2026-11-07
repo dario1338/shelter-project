@@ -9,6 +9,12 @@ const LABELS: Record<ApplicationStatus, string> = {
   CANCELLED: 'Cancelled',
 }
 
+export const APPLICATION_STATUSES: readonly ApplicationStatus[] = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']
+
+export function isApplicationStatus(value: string): value is ApplicationStatus {
+  return (APPLICATION_STATUSES as readonly string[]).includes(value)
+}
+
 export function applicationStatusLabel(status: ApplicationStatus): string {
   return LABELS[status]
 }

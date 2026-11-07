@@ -62,7 +62,7 @@ function ApplicationRow({ application }: Readonly<{ application: Application }>)
 export default function MyApplicationsPage() {
   const [search, setSearch] = useSearchParams()
   const page = readPage(search)
-  const applications = useMyApplications(page - 1, true)
+  const applications = useMyApplications({ page: page - 1 })
   const content = applications.data?.content
 
   return (

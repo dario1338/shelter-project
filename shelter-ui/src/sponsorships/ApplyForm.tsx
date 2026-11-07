@@ -1,4 +1,4 @@
-import { Button, chakra, Field, Heading, Link, Stack, Text, Textarea } from '@chakra-ui/react'
+import { Button, chakra, Field, Heading, Link, Skeleton, Stack, Text, Textarea } from '@chakra-ui/react'
 import { useState, type SubmitEvent } from 'react'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
 import { errorMessage } from '../api/ApiError'
@@ -7,7 +7,7 @@ import type { ReturnState } from '../auth/returnTo'
 import { useAuth } from '../auth/useAuth'
 import { ErrorAlert } from '../ui/ErrorAlert'
 import { NOTE_MAX, validateNote } from './format'
-import { useApply } from './useSponsorships'
+import { useApply, useMyApplications } from './useSponsorships'
 
 function SignInPrompt() {
   const location = useLocation()
@@ -73,6 +73,35 @@ function ApplyFormBody({ dog }: Readonly<{ dog: Dog }>) {
   )
 }
 
+// The API refuses a second pending application for the same dog, but it is better to say so before
+// the user writes a note. If the check itself fails, the form is shown and the API decides.
+function UserSponsorship({ dog }: Readonly<{ dog: Dog }>) {
+  const pending = useMyApplications({ page: 0, size: 1, dogId: dog.id, status: 'PENDING' })
+
+  if (pending.isPending) {
+    return (
+      <>
+        <Text role="status" srOnly>
+          Checking your applications…
+        </Text>
+        <Skeleton h="10" w="48" />
+      </>
+    )
+  }
+  if (pending.data && pending.data.content.length > 0) {
+    return (
+      <Stack gap="2">
+        <Text fontWeight="semibold">You have already applied for this dog.</Text>
+        <Text>The shelter has not decided yet.</Text>
+        <Link asChild variant="underline">
+          <RouterLink to="/applications">My applications</RouterLink>
+        </Link>
+      </Stack>
+    )
+  }
+  return <ApplyFormBody dog={dog} />
+}
+
 // What a visitor can do about sponsoring this dog depends on who they are and on the dog's status.
 export function SponsorshipSection({ dog }: Readonly<{ dog: Dog }>) {
   const { state } = useAuth()
@@ -90,5 +119,5 @@ export function SponsorshipSection({ dog }: Readonly<{ dog: Dog }>) {
   if (state.user.role !== 'USER') {
     return null
   }
-  return <ApplyFormBody dog={dog} />
+  return <UserSponsorship dog={dog} />
 }
