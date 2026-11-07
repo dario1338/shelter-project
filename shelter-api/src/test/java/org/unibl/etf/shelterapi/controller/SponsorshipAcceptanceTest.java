@@ -217,6 +217,35 @@ class SponsorshipAcceptanceTest {
     }
 
     @Test
+    void myApplicationsCanBeFilteredByDogAndStatus() {
+        String admin = adminToken();
+        int firstDog = createDog(admin);
+        int secondDog = createDog(admin);
+        String user = registerAndLogin();
+        int cancelled = applyFor(user, firstDog);
+        withToken(user).when().post(APPLICATIONS + "/{id}/cancel", cancelled).then().statusCode(200);
+        int pending = applyFor(user, firstDog);
+        applyFor(user, secondDog);
+
+        withToken(user).when().get(MY_APPLICATIONS + "?dogId=" + firstDog)
+                .then().statusCode(200)
+                .body("page.totalElements", equalTo(2));
+
+        withToken(user).when().get(MY_APPLICATIONS + "?dogId=" + firstDog + "&status=PENDING")
+                .then().statusCode(200)
+                .body("page.totalElements", equalTo(1))
+                .body("content[0].id", equalTo(pending));
+
+        withToken(user).when().get(MY_APPLICATIONS + "?status=PENDING")
+                .then().statusCode(200)
+                .body("page.totalElements", equalTo(2));
+
+        withToken(registerAndLogin()).when().get(MY_APPLICATIONS + "?dogId=" + firstDog)
+                .then().statusCode(200)
+                .body("page.totalElements", equalTo(0));
+    }
+
+    @Test
     void accessIsRestrictedByRole() {
         String admin = adminToken();
         int dogId = createDog(admin);

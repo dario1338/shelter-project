@@ -142,10 +142,52 @@ class SponsorshipServiceTest {
         when(applicationRepository.findByUserId(1L, pageable)).thenReturn(new PageImpl<>(List.of(
                 application(10L, ana, dog(5L, DogStatus.AVAILABLE), ApplicationStatus.PENDING))));
 
-        Page<SponsorshipResponse> result = sponsorshipService.getMyApplications(ANA, pageable);
+        Page<SponsorshipResponse> result = sponsorshipService.getMyApplications(ANA, null, null, pageable);
 
         assertEquals(1, result.getTotalElements());
         assertEquals(ApplicationStatus.PENDING, result.getContent().get(0).status());
+    }
+
+    @Test
+    void myApplicationsCanBeFilteredByDog() {
+        Pageable pageable = PageRequest.of(0, 10);
+        User ana = user(1L, ANA);
+        when(userRepository.findByEmail(ANA)).thenReturn(Optional.of(ana));
+        when(applicationRepository.findByUserIdAndDogId(1L, 5L, pageable)).thenReturn(new PageImpl<>(List.of(
+                application(10L, ana, dog(5L, DogStatus.AVAILABLE), ApplicationStatus.PENDING))));
+
+        Page<SponsorshipResponse> result = sponsorshipService.getMyApplications(ANA, 5L, null, pageable);
+
+        assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void myApplicationsCanBeFilteredByStatus() {
+        Pageable pageable = PageRequest.of(0, 10);
+        User ana = user(1L, ANA);
+        when(userRepository.findByEmail(ANA)).thenReturn(Optional.of(ana));
+        when(applicationRepository.findByUserIdAndStatus(1L, ApplicationStatus.APPROVED, pageable))
+                .thenReturn(new PageImpl<>(List.of(
+                        application(10L, ana, dog(5L, DogStatus.SPONSORED), ApplicationStatus.APPROVED))));
+
+        Page<SponsorshipResponse> result =
+                sponsorshipService.getMyApplications(ANA, null, ApplicationStatus.APPROVED, pageable);
+
+        assertEquals(ApplicationStatus.APPROVED, result.getContent().get(0).status());
+    }
+
+    @Test
+    void myApplicationsCanBeFilteredByDogAndStatus() {
+        Pageable pageable = PageRequest.of(0, 10);
+        User ana = user(1L, ANA);
+        when(userRepository.findByEmail(ANA)).thenReturn(Optional.of(ana));
+        when(applicationRepository.findByUserIdAndDogIdAndStatus(1L, 5L, ApplicationStatus.PENDING, pageable))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        Page<SponsorshipResponse> result =
+                sponsorshipService.getMyApplications(ANA, 5L, ApplicationStatus.PENDING, pageable);
+
+        assertEquals(0, result.getTotalElements());
     }
 
     @Test
