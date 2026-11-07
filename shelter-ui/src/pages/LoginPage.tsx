@@ -1,6 +1,7 @@
 import { Button, chakra, Heading, Link, Stack, Text } from '@chakra-ui/react'
 import { useState, type SubmitEvent } from 'react'
-import { Link as RouterLink, Navigate } from 'react-router-dom'
+import { Link as RouterLink, Navigate, useLocation } from 'react-router-dom'
+import { returnPathFrom } from '../auth/returnTo'
 import { errorMessage } from '../api/ApiError'
 import { useAuth } from '../auth/useAuth'
 import { validateCurrentPassword, validateEmail } from '../auth/validation'
@@ -13,6 +14,7 @@ interface FieldErrors {
 }
 
 export default function LoginPage() {
+  const location = useLocation()
   const { state, signIn } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -22,7 +24,7 @@ export default function LoginPage() {
 
   // Signing in changes the auth state, which leaves this page by itself.
   if (state.status === 'authenticated') {
-    return <Navigate to="/" replace />
+    return <Navigate to={returnPathFrom(location.state)} replace />
   }
 
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
@@ -74,7 +76,7 @@ export default function LoginPage() {
       <Text>
         No account yet?{' '}
         <Link asChild variant="underline">
-          <RouterLink to="/register">Create one</RouterLink>
+          <RouterLink to="/register" state={location.state}>Create one</RouterLink>
         </Link>
       </Text>
     </Stack>
