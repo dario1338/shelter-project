@@ -52,6 +52,10 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login",
                                 "/api/auth/refresh", "/api/auth/logout").permitAll()
+                        // Care details are not public. These two rules must stay above the public GET rule.
+                        // Who may read them is decided by the service: administrators and the approved sponsor.
+                        .requestMatchers(HttpMethod.GET, "/api/dogs/*/care").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/dogs/*/care").hasRole(ADMIN_ROLE)
                         // Browsing dogs is public; creating, changing and deleting is for admins only.
                         .requestMatchers(HttpMethod.GET, "/api/dogs", "/api/dogs/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/dogs").hasRole(ADMIN_ROLE)
