@@ -26,6 +26,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -96,13 +97,29 @@ class SponsorshipControllerTest {
 
     @Test
     void myApplicationsReturnsPagedContent() throws Exception {
-        when(sponsorshipService.getMyApplications(eq(ANA), any(Pageable.class)))
+        when(sponsorshipService.getMyApplications(eq(ANA), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(response(ApplicationStatus.PENDING))));
 
         mockMvc.perform(get(APPLICATIONS + "/me").principal(ana))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].status").value("PENDING"))
                 .andExpect(jsonPath("$.page.totalElements").value(1));
+    }
+
+    @Test
+    void myApplicationsCanBeFilteredByDogAndStatus() throws Exception {
+        when(sponsorshipService.getMyApplications(eq(ANA), eq(5L), eq(ApplicationStatus.PENDING), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(response(ApplicationStatus.PENDING))));
+
+        mockMvc.perform(get(APPLICATIONS + "/me").principal(ana).param("dogId", "5").param("status", "PENDING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].status").value("PENDING"));
+    }
+
+    @Test
+    void myApplicationsRejectAnInvalidDogId() throws Exception {
+        mockMvc.perform(get(APPLICATIONS + "/me").principal(ana).param("dogId", "abc"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

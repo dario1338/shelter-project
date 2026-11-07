@@ -42,8 +42,10 @@ public class SponsorshipController {
     @GetMapping("/me")
     public PagedModel<SponsorshipResponse> myApplications(
             Principal principal,
+            @RequestParam(required = false) Long dogId,
+            @RequestParam(required = false) ApplicationStatus status,
             @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return new PagedModel<>(sponsorshipService.getMyApplications(principal.getName(), pageable));
+        return new PagedModel<>(sponsorshipService.getMyApplications(principal.getName(), dogId, status, pageable));
     }
 
     @GetMapping

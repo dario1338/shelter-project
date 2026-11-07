@@ -51,9 +51,20 @@ public class SponsorshipService {
     }
 
     @Transactional(readOnly = true)
-    public Page<SponsorshipResponse> getMyApplications(String email, Pageable pageable) {
-        User user = findUser(email);
-        return applicationRepository.findByUserId(user.getId(), pageable).map(SponsorshipService::toResponse);
+    public Page<SponsorshipResponse> getMyApplications(String email, Long dogId, ApplicationStatus status,
+                                                       Pageable pageable) {
+        Long userId = findUser(email).getId();
+        Page<SponsorshipApplication> applications;
+        if (dogId != null && status != null) {
+            applications = applicationRepository.findByUserIdAndDogIdAndStatus(userId, dogId, status, pageable);
+        } else if (dogId != null) {
+            applications = applicationRepository.findByUserIdAndDogId(userId, dogId, pageable);
+        } else if (status != null) {
+            applications = applicationRepository.findByUserIdAndStatus(userId, status, pageable);
+        } else {
+            applications = applicationRepository.findByUserId(userId, pageable);
+        }
+        return applications.map(SponsorshipService::toResponse);
     }
 
     @Transactional(readOnly = true)

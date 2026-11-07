@@ -12,7 +12,16 @@ public interface SponsorshipApplicationRepository extends JpaRepository<Sponsors
 
     boolean existsByUserIdAndDogIdAndStatus(Long userId, Long dogId, ApplicationStatus status);
 
+    boolean existsByUserEmailAndDogIdAndStatus(String email, Long dogId, ApplicationStatus status);
+
     Page<SponsorshipApplication> findByUserId(Long userId, Pageable pageable);
+
+    Page<SponsorshipApplication> findByUserIdAndDogId(Long userId, Long dogId, Pageable pageable);
+
+    Page<SponsorshipApplication> findByUserIdAndStatus(Long userId, ApplicationStatus status, Pageable pageable);
+
+    Page<SponsorshipApplication> findByUserIdAndDogIdAndStatus(Long userId, Long dogId, ApplicationStatus status,
+                                                               Pageable pageable);
 
     Page<SponsorshipApplication> findByStatus(ApplicationStatus status, Pageable pageable);
 

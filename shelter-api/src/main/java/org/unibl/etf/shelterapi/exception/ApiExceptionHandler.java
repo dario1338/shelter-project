@@ -16,6 +16,16 @@ public class ApiExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    @ExceptionHandler(AccessForbiddenException.class)
+    public ProblemDetail handleAccessForbidden(AccessForbiddenException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidRequestException.class)
+    public ProblemDetail handleInvalidRequest(InvalidRequestException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
     @ExceptionHandler(EmailAlreadyUsedException.class)
     public ProblemDetail handleEmailAlreadyUsed(EmailAlreadyUsedException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
