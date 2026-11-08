@@ -56,6 +56,10 @@ public class SecurityConfig {
                         // Who may read them is decided by the service: administrators and the approved sponsor.
                         .requestMatchers(HttpMethod.GET, "/api/dogs/*/care").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/dogs/*/care").hasRole(ADMIN_ROLE)
+                        // Photos are shown through the public dog endpoints, but only admins change them.
+                        // Without these two rules the paths would fall to anyRequest().authenticated().
+                        .requestMatchers(HttpMethod.POST, "/api/dogs/*/images").hasRole(ADMIN_ROLE)
+                        .requestMatchers(HttpMethod.DELETE, "/api/dogs/*/images/*").hasRole(ADMIN_ROLE)
                         // Browsing dogs is public; creating, changing and deleting is for admins only.
                         .requestMatchers(HttpMethod.GET, "/api/dogs", "/api/dogs/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/dogs").hasRole(ADMIN_ROLE)
