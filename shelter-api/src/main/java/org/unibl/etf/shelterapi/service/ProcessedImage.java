@@ -8,10 +8,10 @@ public record ProcessedImage(byte[] content, String contentType, String extensio
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof ProcessedImage that
-                && Arrays.equals(content, that.content)
-                && Objects.equals(contentType, that.contentType)
-                && Objects.equals(extension, that.extension);
+        return other instanceof ProcessedImage(byte[] otherContent, String otherType, String otherExtension)
+                && Arrays.equals(content, otherContent)
+                && Objects.equals(contentType, otherType)
+                && Objects.equals(extension, otherExtension);
     }
 
     @Override

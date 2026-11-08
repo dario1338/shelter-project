@@ -27,7 +27,7 @@ class ProcessedImageTest {
 
         assertNotEquals(original, image(new byte[]{1, 3}, "image/jpeg"));
         assertNotEquals(original, image(new byte[]{1, 2}, "image/png"));
-        assertNotEquals(original, "not an image");
+        assertNotEquals("not an image", original);
     }
 
     @Test
