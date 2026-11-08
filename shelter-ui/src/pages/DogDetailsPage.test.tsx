@@ -25,6 +25,20 @@ describe('DogDetailsPage', () => {
     expect(screen.getByRole('img', { name: 'No photo of Rex yet' })).toBeInTheDocument()
   })
 
+  it('shows the photos of the dog and lets the visitor choose between them', async () => {
+    const images = [
+      { id: 1, url: 'https://files/a.jpg' },
+      { id: 2, url: 'https://files/b.jpg' },
+    ]
+    routeFetch(fetchMock, { '/api/dogs/7': () => jsonResponse(200, dog({ id: 7, name: 'Rex', images, primaryImageUrl: images[0].url })) })
+
+    renderApp('/dogs/7')
+    expect(await screen.findByRole('img', { name: 'Photo of Rex' })).toHaveAttribute('src', 'https://files/a.jpg')
+    fireEvent.click(screen.getByRole('button', { name: 'Show photo 2 of 2' }))
+
+    expect(screen.getByRole('img', { name: 'Photo of Rex' })).toHaveAttribute('src', 'https://files/b.jpg')
+  })
+
   it('leaves out what is not known about the dog', async () => {
     routeFetch(fetchMock, { '/api/dogs/7': () => jsonResponse(200, dog({ id: 7, breed: null, birthYear: null, description: null })) })
 

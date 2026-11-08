@@ -184,7 +184,7 @@ describe('editing a dog', () => {
     renderApp('/admin/dogs/4/edit')
     fireEvent.click(await screen.findByRole('button', { name: 'Delete dog' }))
     expect(deleted).toBe(false)
-    expect(screen.getByText(/also removes its applications and care details/)).toBeInTheDocument()
+    expect(screen.getByText(/also removes its applications, care details and photos/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Yes, delete' }))
 
     expect(await screen.findByRole('heading', { name: 'Dogs' })).toBeInTheDocument()

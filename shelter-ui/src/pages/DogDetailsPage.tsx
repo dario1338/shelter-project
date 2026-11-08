@@ -3,7 +3,7 @@ import { Link as RouterLink, useLocation, useParams } from 'react-router-dom'
 import { ApiError, errorMessage } from '../api/ApiError'
 import { useAuth } from '../auth/useAuth'
 import { CareSection } from '../care/CareSection'
-import { DogImage } from '../dogs/DogImage'
+import { DogGallery } from '../dogs/DogGallery'
 import { dogAge, parseDogId } from '../dogs/format'
 import { listSearchFrom } from '../dogs/listSearch'
 import { SponsorshipSection } from '../sponsorships/ApplyForm'
@@ -67,7 +67,7 @@ export default function DogDetailsPage() {
 
       {dog.data && (
         <SimpleGrid columns={{ base: 1, md: 2 }} gap="8">
-          <DogImage name={dog.data.name} h="80" borderRadius="md" />
+          <DogGallery dog={dog.data} />
           <Stack gap="4" align="start">
             <Heading as="h1" size="2xl">
               {dog.data.name}
