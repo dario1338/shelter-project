@@ -5,6 +5,11 @@ spring:
     url: jdbc:postgresql://localhost:5433/shelter_database
     username: postgres
     password: postgres
+  servlet:
+    multipart:
+      # A photo is at most 5 MB (DogImageService checks it again); the request adds a little for the headers.
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 app:
   security:
@@ -22,3 +27,10 @@ app:
     # Optional: the initial admin is created at startup only when both values are set.
     email: ${ADMIN_EMAIL:}
     password: ${ADMIN_PASSWORD:}
+  storage:
+    supabase:
+      # Required, no defaults on purpose: the application refuses to start without them.
+      # The key can write to the whole project, so it exists only in the environment, never in the repository.
+      url: ${SUPABASE_URL}
+      service-key: ${SUPABASE_SERVICE_KEY}
+      bucket: ${SUPABASE_BUCKET}

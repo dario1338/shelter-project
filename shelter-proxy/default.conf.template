@@ -30,6 +30,8 @@ server {
 
     # API traffic
     location ^~ /api/ {
+        # Photo uploads are up to 5 MB (the API enforces that); nginx would stop anything above 1 MB by default.
+        client_max_body_size 6m;
         proxy_pass https://${API_UPSTREAM};
         proxy_set_header Host ${API_UPSTREAM};
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

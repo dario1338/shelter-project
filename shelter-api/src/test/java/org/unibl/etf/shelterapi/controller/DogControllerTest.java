@@ -10,6 +10,7 @@ import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.unibl.etf.shelterapi.dto.DogImageResponse;
 import org.unibl.etf.shelterapi.dto.DogRequest;
 import org.unibl.etf.shelterapi.dto.DogResponse;
 import org.unibl.etf.shelterapi.exception.ApiExceptionHandler;
@@ -49,7 +50,8 @@ class DogControllerTest {
     }
 
     private static DogResponse rex() {
-        return new DogResponse(1L, "Rex", "Mixed", 2020, "Friendly", DogStatus.AVAILABLE);
+        return new DogResponse(1L, "Rex", "Mixed", 2020, "Friendly", DogStatus.AVAILABLE,
+                "https://files/a.jpg", List.of(new DogImageResponse(3L, "https://files/a.jpg")));
     }
 
     @Test
@@ -75,7 +77,9 @@ class DogControllerTest {
 
         mockMvc.perform(get("/api/dogs/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Rex"));
+                .andExpect(jsonPath("$.name").value("Rex"))
+                .andExpect(jsonPath("$.primaryImageUrl").value("https://files/a.jpg"))
+                .andExpect(jsonPath("$.images[0].id").value(3));
     }
 
     @Test

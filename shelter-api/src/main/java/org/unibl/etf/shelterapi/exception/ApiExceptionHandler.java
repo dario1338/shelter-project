@@ -3,13 +3,17 @@ package org.unibl.etf.shelterapi.exception;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    private static final int HTTP_CONTENT_TOO_LARGE = 413;
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ProblemDetail handleNotFound(ResourceNotFoundException ex) {
@@ -24,6 +28,19 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidRequestException.class)
     public ProblemDetail handleInvalidRequest(InvalidRequestException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    /** The size is checked by the multipart limit first and by the service second; both end up here. */
+    @ExceptionHandler({UploadTooLargeException.class, MaxUploadSizeExceededException.class})
+    public ProblemDetail handleUploadTooLarge() {
+        return ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(HTTP_CONTENT_TOO_LARGE),
+                "The image is too large (at most 5 MB)");
+    }
+
+    /** The photo storage is an external service, so its failure is a bad gateway, not a server bug. */
+    @ExceptionHandler(ImageStorageException.class)
+    public ProblemDetail handleImageStorage(ImageStorageException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, ex.getMessage());
     }
 
     @ExceptionHandler(EmailAlreadyUsedException.class)
