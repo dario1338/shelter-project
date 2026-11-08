@@ -135,12 +135,15 @@ class SupabaseImageStorageTest {
 
     @Test
     void deletingAMissingFileIsNotAnError() throws IOException {
-        HttpServer server = start(404, new Received());
+        Received received = new Received();
+        HttpServer server = start(404, received);
         try {
             storage(server, TEST_KEY).delete("dogs/1/gone.jpg");
         } finally {
             server.stop(0);
         }
+
+        assertEquals(1, received.calls.get());
     }
 
     @Test

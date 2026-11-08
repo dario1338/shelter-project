@@ -1,27 +1,27 @@
 package org.unibl.etf.shelterapi.service;
 
+import java.util.Arrays;
+import java.util.Objects;
+
 /** An uploaded photo after validation and re-encoding. */
-public final class ProcessedImage {
+public record ProcessedImage(byte[] content, String contentType, String extension) {
 
-    private final byte[] content;
-    private final String contentType;
-    private final String extension;
-
-    public ProcessedImage(byte[] content, String contentType, String extension) {
-        this.content = content;
-        this.contentType = contentType;
-        this.extension = extension;
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof ProcessedImage that
+                && Arrays.equals(content, that.content)
+                && Objects.equals(contentType, that.contentType)
+                && Objects.equals(extension, that.extension);
     }
 
-    public byte[] content() {
-        return content;
+    @Override
+    public int hashCode() {
+        return 31 * Objects.hash(contentType, extension) + Arrays.hashCode(content);
     }
 
-    public String contentType() {
-        return contentType;
-    }
-
-    public String extension() {
-        return extension;
+    /** The bytes of the photo are left out, they are too long to be useful in a log. */
+    @Override
+    public String toString() {
+        return "ProcessedImage[" + content.length + " bytes, " + contentType + ", " + extension + "]";
     }
 }

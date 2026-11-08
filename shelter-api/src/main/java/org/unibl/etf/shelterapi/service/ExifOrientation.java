@@ -32,30 +32,44 @@ final class ExifOrientation {
         if (data.length < 4 || unsigned(data[0]) != MARKER_PREFIX || unsigned(data[1]) != MARKER_SOI) {
             return NORMAL;
         }
-        int pos = 2;
-        while (pos + 4 <= data.length) {
-            if (unsigned(data[pos]) != MARKER_PREFIX) {
-                return NORMAL;
-            }
-            int marker = unsigned(data[pos + 1]);
-            if (marker == MARKER_PREFIX) {
-                pos++;
-            } else if (isStandalone(marker)) {
-                pos += 2;
-            } else if (marker == MARKER_SOS || marker == MARKER_EOI) {
-                return NORMAL;
-            } else {
-                int length = (unsigned(data[pos + 2]) << 8) | unsigned(data[pos + 3]);
-                if (length < 2) {
-                    return NORMAL;
-                }
-                if (marker == MARKER_APP1 && hasExifHeader(data, pos + 4)) {
-                    return readTiff(data, pos + 4 + EXIF_HEADER.length, Math.min(pos + 2 + length, data.length));
-                }
-                pos += 2 + length;
-            }
+        int segment = findExifSegment(data);
+        if (segment < 0) {
+            return NORMAL;
         }
-        return NORMAL;
+        int length = (unsigned(data[segment + 2]) << 8) | unsigned(data[segment + 3]);
+        return readTiff(data, segment + 4 + EXIF_HEADER.length, Math.min(segment + 2 + length, data.length));
+    }
+
+    /** Position of the marker that starts the EXIF segment, or -1 when the file has none before the image data. */
+    private static int findExifSegment(byte[] data) {
+        int pos = 2;
+        while (pos + 4 <= data.length && unsigned(data[pos]) == MARKER_PREFIX) {
+            int marker = unsigned(data[pos + 1]);
+            if (marker == MARKER_SOS || marker == MARKER_EOI) {
+                return -1;
+            }
+            int size = segmentSize(data, pos, marker);
+            if (size < 0) {
+                return -1;
+            }
+            if (marker == MARKER_APP1 && hasExifHeader(data, pos + 4)) {
+                return pos;
+            }
+            pos += size;
+        }
+        return -1;
+    }
+
+    /** How many bytes to skip to reach the next marker, or -1 when the segment length is impossible. */
+    private static int segmentSize(byte[] data, int pos, int marker) {
+        if (marker == MARKER_PREFIX) {
+            return 1;
+        }
+        if (isStandalone(marker)) {
+            return 2;
+        }
+        int length = (unsigned(data[pos + 2]) << 8) | unsigned(data[pos + 3]);
+        return length < 2 ? -1 : 2 + length;
     }
 
     private static boolean isStandalone(int marker) {
