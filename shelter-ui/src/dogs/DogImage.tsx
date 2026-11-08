@@ -1,12 +1,30 @@
-import { Box, type BoxProps } from '@chakra-ui/react'
+import { Box, type BoxProps, Image } from '@chakra-ui/react'
+import { useState } from 'react'
 
-// There are no dog photos yet. This stands in for them and will be replaced by the photo once the
-// API provides one, so the pages do not change when it does.
-export function DogImage({ name, ...box }: Readonly<{ name: string } & BoxProps>) {
+interface DogImageProps extends BoxProps {
+  name: string
+  // The address of the photo. Without one, or when it cannot be loaded, a placeholder takes its place.
+  src?: string | null
+  alt?: string
+}
+
+export function DogImage({ name, src, alt, ...box }: Readonly<DogImageProps>) {
+  // The address that failed to load, so a different photo given later is tried again.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+
+  if (src && src !== failedSrc) {
+    return (
+      <Box overflow="hidden" bg="bg.muted" {...box}>
+        <Image src={src} alt={alt ?? `Photo of ${name}`} loading="lazy" w="full" h="full" objectFit="cover" onError={() => setFailedSrc(src)} />
+      </Box>
+    )
+  }
+
+  const label = src ? `Photo of ${name} could not be loaded` : `No photo of ${name} yet`
   return (
     <Box
       role="img"
-      aria-label={`No photo of ${name} yet`}
+      aria-label={label}
       bg="bg.muted"
       color="fg.muted"
       display="flex"

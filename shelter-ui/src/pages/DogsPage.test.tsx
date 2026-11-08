@@ -32,6 +32,17 @@ describe('DogsPage', () => {
     expect(screen.getByText('Available', { ignore: 'option' })).toBeInTheDocument()
   })
 
+  it('shows the photo of a dog in its card', async () => {
+    routeFetch(fetchMock, {
+      '/api/dogs': () => jsonResponse(200, dogPage([dog({ id: 1, name: 'Rex', primaryImageUrl: 'https://files/a.jpg' }), dog({ id: 2, name: 'Luna' })])),
+    })
+
+    renderApp('/dogs')
+
+    expect(await screen.findByRole('img', { name: 'Photo of Rex' })).toHaveAttribute('src', 'https://files/a.jpg')
+    expect(screen.getByRole('img', { name: 'No photo of Luna yet' })).toBeInTheDocument()
+  })
+
   it('asks for the first page of all dogs by default', async () => {
     routeFetch(fetchMock, { '/api/dogs': () => jsonResponse(200, dogPage([dog()])) })
 

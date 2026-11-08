@@ -8,6 +8,8 @@ export function dog(overrides: Partial<Dog> = {}): Dog {
     birthYear: 2020,
     description: 'A calm dog who likes long walks.',
     status: 'AVAILABLE',
+    primaryImageUrl: null,
+    images: [],
     ...overrides,
   }
 }

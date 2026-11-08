@@ -8,6 +8,7 @@ import { useCare, useSaveCare } from '../care/useCare'
 import { dogToForm } from '../dogs/dogFormValues'
 import { DogForm } from '../dogs/DogForm'
 import { parseDogId } from '../dogs/format'
+import { PhotoEditor } from '../dogs/PhotoEditor'
 import { useDeleteDog, useUpdateDog } from '../dogs/useDogMutations'
 import { useDog } from '../dogs/useDogs'
 import { ErrorAlert } from '../ui/ErrorAlert'
@@ -55,7 +56,7 @@ function DeleteDog({ dog }: Readonly<{ dog: Dog }>) {
       {confirming ? (
         <Stack gap="3" align="start">
           <Text>
-            Delete {dog.name}? This also removes its applications and care details, and it cannot be undone.
+            Delete {dog.name}? This also removes its applications, care details and photos, and it cannot be undone.
           </Text>
           <HStack gap="2">
             <Button colorPalette="red" loading={remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: () => navigate('/dogs') })}>
@@ -95,6 +96,8 @@ function EditDog({ dog }: Readonly<{ dog: Dog }>) {
           {update.isSuccess && !update.isPending ? 'Dog saved.' : ''}
         </Text>
       </Stack>
+      <Separator />
+      <PhotoEditor dog={dog} />
       <Separator />
       <CareEditor dogId={dog.id} />
       <Separator />

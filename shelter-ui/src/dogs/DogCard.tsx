@@ -13,7 +13,7 @@ export function DogCard({ dog }: Readonly<{ dog: Dog }>) {
   const details = [dog.breed, dogAge(dog.birthYear)].filter(Boolean).join(' · ')
   return (
     <Card.Root position="relative" overflow="hidden" _hover={{ shadow: 'md' }}>
-      <DogImage name={dog.name} h="40" />
+      <DogImage name={dog.name} src={dog.primaryImageUrl} h="40" />
       <Card.Body gap="2">
         <Card.Title>
           <Link

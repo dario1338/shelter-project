@@ -3,6 +3,12 @@ import { toApiError } from './ApiError'
 
 export type DogStatus = 'AVAILABLE' | 'SPONSORED' | 'ADOPTED'
 
+// A photo of a dog. The address is public, so a browser loads it directly from the storage.
+export interface DogPhoto {
+  id: number
+  url: string
+}
+
 export interface Dog {
   id: number
   name: string
@@ -11,6 +17,10 @@ export interface Dog {
   birthYear: number | null
   description: string | null
   status: DogStatus
+  // The first photo, for the list, or null when the dog has none.
+  primaryImageUrl: string | null
+  // All photos in the order they are shown; the first one is the main photo.
+  images: DogPhoto[]
 }
 
 export interface DogPage {
