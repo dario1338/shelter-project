@@ -96,8 +96,8 @@ describe('tabs on the edit page', () => {
   })
 })
 
-describe('tabs on the page for a new dog', () => {
-  it('shows the photos and care tabs but does not let them be opened yet', async () => {
+describe('the page for a new dog', () => {
+  it('has no tabs', async () => {
     routeFetch(fetchMock, {
       '/api/auth/refresh': () => jsonResponse(200, { accessToken: 't1' }),
       '/api/auth/me': () => jsonResponse(200, admin),
@@ -106,9 +106,6 @@ describe('tabs on the page for a new dog', () => {
     renderApp('/admin/dogs/new')
 
     expect(await screen.findByLabelText('Name')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Dog' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('tab', { name: 'Photos' })).toBeDisabled()
-    expect(screen.getByRole('tab', { name: 'Care details' })).toBeDisabled()
-    expect(screen.getByText(/can be added as soon as the dog is saved/)).toBeInTheDocument()
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
   })
 })
