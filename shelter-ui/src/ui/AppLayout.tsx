@@ -5,6 +5,10 @@ import { useAuth } from '../auth/useAuth'
 import { PawIcon } from './PawIcon'
 import { useColorMode } from './useColorMode'
 
+// The content is up to 1280 px wide, and up to 1600 px on screens of 1536 px and more, where there is room
+// for a fifth dog in a row. The header uses the same width, so the two line up.
+const CONTENT_WIDTH = { base: '7xl', '2xl': '100rem' }
+
 function SunIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -95,7 +99,7 @@ export default function AppLayout() {
   return (
     <Box minH="100vh">
       <Box as="header" borderBottomWidth="1px">
-        <Container maxW="7xl">
+        <Container maxW={CONTENT_WIDTH}>
           <Flex align="center" justify="space-between" py="3" columnGap="4" rowGap="2" wrap="wrap">
             <HStack as="nav" aria-label="Main" gap={{ base: '3', sm: '5' }} wrap="wrap">
               <Link asChild fontWeight="bold" fontSize="lg" color="purple.fg">
@@ -113,7 +117,7 @@ export default function AppLayout() {
           </Flex>
         </Container>
       </Box>
-      <Container as="main" maxW="7xl" py="8">
+      <Container as="main" maxW={CONTENT_WIDTH} py="8">
         <Outlet />
       </Container>
     </Box>

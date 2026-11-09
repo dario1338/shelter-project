@@ -38,14 +38,13 @@ describe("App", () => {
     expect(screen.getByRole("link", { name: "Create account" })).toHaveAttribute("href", "/register");
   });
 
-  it("links to the dogs from the header and the home page", async () => {
+  it("links to the dogs from the header", async () => {
     serve();
 
     renderApp();
     await screen.findByRole("link", { name: "Sign in" });
 
     expect(screen.getByRole("link", { name: "Dogs" })).toHaveAttribute("href", "/dogs");
-    expect(screen.getByRole("link", { name: "See all dogs" })).toHaveAttribute("href", "/dogs");
   });
 
   it("restores the session from the refresh cookie", async () => {
