@@ -9,10 +9,10 @@ import { PawIcon } from '../ui/PawIcon'
 // The same columns as the list of dogs.
 const GRID_COLUMNS = { base: 1, sm: 2, md: 3, xl: 4, '2xl': 5 }
 
-// The home page shows one row of dogs, whatever the width of the screen. The API sends one dog more than
-// the narrowest row needs, and the ones that would start a second row are hidden: two on a phone, then
-// as many as there are columns. Hidden cards are not in the tab order either.
-function rowOnly(index: number) {
+// The home page shows one row of dogs, and how many fit in it depends on the screen: two on a phone, then
+// three, four and, on a wide screen (from 1536 px), five. The API sends the most that any screen shows, and the dogs
+// that a screen has no room for are hidden. Hidden cards are not in the tab order either.
+function visibleFrom(index: number) {
   const shown = 'block'
   const hidden = 'none'
   return {
@@ -36,7 +36,7 @@ function LatestDogs() {
           Loading dogs…
         </Text>
         {SKELETON_KEYS.map((key, index) => (
-          <Skeleton key={key} h="64" borderRadius="md" display={rowOnly(index)} />
+          <Skeleton key={key} h="64" borderRadius="md" display={visibleFrom(index)} />
         ))}
       </SimpleGrid>
     )
@@ -57,7 +57,7 @@ function LatestDogs() {
   return (
     <SimpleGrid columns={GRID_COLUMNS} gap="6">
       {dogs.data.content.slice(0, HOME_DOG_COUNT).map((dog, index) => (
-        <Box key={dog.id} display={rowOnly(index)}>
+        <Box key={dog.id} display={visibleFrom(index)}>
           <DogCard dog={dog} />
         </Box>
       ))}

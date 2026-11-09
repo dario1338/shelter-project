@@ -35,6 +35,14 @@ describe('fetchDogs', () => {
     expect(url.searchParams.has('status')).toBe(false)
   })
 
+  it('asks for the size of page that the screen needs', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, dogPage([])))
+
+    await fetchDogs({ page: 0, size: 15 })
+
+    expect(requestedUrl().searchParams.get('size')).toBe('15')
+  })
+
   it('filters by status when one is given', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, dogPage([])))
 

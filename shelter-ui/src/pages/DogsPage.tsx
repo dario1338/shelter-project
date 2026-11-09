@@ -2,6 +2,7 @@ import { Button, Flex, Heading, HStack, SimpleGrid, Skeleton, Stack, Text } from
 import { Link as RouterLink, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { errorMessage } from '../api/ApiError'
+import { WIDE_DOG_PAGE_SIZE } from '../api/dogs'
 import { DogCard } from '../dogs/DogCard'
 import { emptyListMessage } from '../dogs/format'
 import { readListView, writeListView, type ListView } from '../dogs/listSearch'
@@ -9,6 +10,7 @@ import { PageControls } from '../dogs/PageControls'
 import { StatusFilter } from '../dogs/StatusFilter'
 import { useDogs } from '../dogs/useDogs'
 import { ErrorAlert } from '../ui/ErrorAlert'
+import { useMediaQuery, VERY_WIDE } from '../ui/screens'
 
 const GRID_COLUMNS = { base: 1, sm: 2, md: 3, xl: 4, '2xl': 5 }
 
@@ -32,7 +34,9 @@ export default function DogsPage() {
   const [search, setSearch] = useSearchParams()
   const { state } = useAuth()
   const view = readListView(search)
-  const dogs = useDogs({ page: view.page - 1, status: view.status })
+  // A wide screen shows five dogs in a row, and a page of fifteen fills three rows of them.
+  const size = useMediaQuery(VERY_WIDE) ? WIDE_DOG_PAGE_SIZE : undefined
+  const dogs = useDogs({ page: view.page - 1, status: view.status, size })
 
   const show = (next: ListView) => setSearch(writeListView(next))
   const content = dogs.data?.content

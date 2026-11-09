@@ -33,18 +33,22 @@ export interface DogPage {
   }
 }
 
+// 12 fills the rows of three and four dogs; 15 fills the rows of five, shown on a wide screen (from 1536 px).
 export const DOG_PAGE_SIZE = 12
+export const WIDE_DOG_PAGE_SIZE = 15
 
 export interface DogListParams {
   // Zero-based, as in the API.
   page: number
   status?: DogStatus
+  // How many dogs a page holds; DOG_PAGE_SIZE when not given.
+  size?: number
 }
 
 // The API has no default order, and without one the database may return the same dog on two pages
 // or none at all. The order is therefore always asked for: by name, with the id breaking ties.
-function listUrl({ page, status }: DogListParams): string {
-  const query = new URLSearchParams({ page: String(page), size: String(DOG_PAGE_SIZE) })
+function listUrl({ page, status, size = DOG_PAGE_SIZE }: DogListParams): string {
+  const query = new URLSearchParams({ page: String(page), size: String(size) })
   query.append('sort', 'name,asc')
   query.append('sort', 'id,asc')
   if (status) {
