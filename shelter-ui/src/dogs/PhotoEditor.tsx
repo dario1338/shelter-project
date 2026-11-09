@@ -1,4 +1,4 @@
-import { Box, Button, Field, Heading, HStack, Input, SimpleGrid, Stack, Text } from '@chakra-ui/react'
+import { Box, Button, Field, HStack, Input, SimpleGrid, Stack, Text } from '@chakra-ui/react'
 import { type ChangeEvent, useState } from 'react'
 import { errorMessage } from '../api/ApiError'
 import type { Dog } from '../api/dogs'
@@ -59,9 +59,6 @@ export function PhotoEditor({ dog }: Readonly<{ dog: Dog }>) {
 
   return (
     <Stack gap="4">
-      <Heading as="h2" size="lg">
-        Photos
-      </Heading>
       {dog.images.length === 0 ? (
         <Text color="fg.muted">This dog has no photos yet.</Text>
       ) : (

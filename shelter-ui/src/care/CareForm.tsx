@@ -51,9 +51,6 @@ export function CareForm({ care, pending, saved, error, onSubmit }: Readonly<Car
   return (
     <chakra.form noValidate onSubmit={handleSubmit} w="full" maxW="2xl">
       <Stack gap="4">
-        <Heading as="h2" size="lg">
-          Care details
-        </Heading>
         {error && <ErrorAlert message={error} />}
 
         <Field.Root>

@@ -3,6 +3,7 @@ import { Link as RouterLink } from 'react-router-dom'
 import { errorMessage } from '../api/ApiError'
 import { useAuth } from '../auth/useAuth'
 import { useMyApplications } from '../sponsorships/useSponsorships'
+import { editPath } from '../dogs/editTab'
 import { ErrorAlert } from '../ui/ErrorAlert'
 import { CareView } from './CareView'
 import { useCare } from './useCare'
@@ -30,7 +31,7 @@ function LoadedCare({ dogId, admin }: Readonly<{ dogId: number; admin: boolean }
       {care.data && <CareView care={care.data} admin={admin} />}
       {admin && (
         <Link asChild variant="underline" alignSelf="start">
-          <RouterLink to={`/admin/dogs/${dogId}/edit`}>Edit care details</RouterLink>
+          <RouterLink to={editPath(dogId, 'care')}>Edit care details</RouterLink>
         </Link>
       )}
     </Stack>

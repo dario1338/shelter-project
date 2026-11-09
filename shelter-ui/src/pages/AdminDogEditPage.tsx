@@ -1,12 +1,14 @@
-import { Button, Heading, HStack, Link, Separator, Skeleton, Stack, Text } from '@chakra-ui/react'
+import { Button, Heading, HStack, Link, Separator, Skeleton, Stack, Tabs, Text } from '@chakra-ui/react'
 import { useState } from 'react'
-import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
+import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError, errorMessage } from '../api/ApiError'
 import type { Dog } from '../api/dogs'
 import { CareForm } from '../care/CareForm'
 import { useCare, useSaveCare } from '../care/useCare'
 import { dogToForm } from '../dogs/dogFormValues'
 import { DogForm } from '../dogs/DogForm'
+import { DogTabList } from '../dogs/DogTabList'
+import { DEFAULT_TAB, tabFrom } from '../dogs/editTab'
 import { parseDogId } from '../dogs/format'
 import { PhotoEditor } from '../dogs/PhotoEditor'
 import { useDeleteDog, useUpdateDog } from '../dogs/useDogMutations'
@@ -78,31 +80,45 @@ function DeleteDog({ dog }: Readonly<{ dog: Dog }>) {
 
 function EditDog({ dog }: Readonly<{ dog: Dog }>) {
   const update = useUpdateDog(dog.id)
+  const [params, setParams] = useSearchParams()
+  const tab = tabFrom(params.get('tab'))
 
+  // Replaced, not added, so that moving between the tabs does not fill the history.
+  function choose(next: string) {
+    const chosen = tabFrom(next)
+    setParams(chosen === DEFAULT_TAB ? {} : { tab: chosen }, { replace: true })
+  }
+
+  // A tab is built when it is first opened and kept afterwards, so what was typed into one of the forms
+  // is still there after a visit to another tab.
   return (
-    <Stack gap="8">
-      <Stack gap="4">
-        <Heading as="h2" size="lg">
-          Dog
-        </Heading>
-        <DogForm
-          initial={dogToForm(dog)}
-          submitLabel="Save dog"
-          pending={update.isPending}
-          error={update.isError ? errorMessage(update.error) : undefined}
-          onSubmit={(input) => update.mutate(input)}
-        />
-        <Text role="status" aria-live="polite">
-          {update.isSuccess && !update.isPending ? 'Dog saved.' : ''}
-        </Text>
-      </Stack>
-      <Separator />
-      <PhotoEditor dog={dog} />
-      <Separator />
-      <CareEditor dogId={dog.id} />
-      <Separator />
-      <DeleteDog dog={dog} />
-    </Stack>
+    <Tabs.Root value={tab} onValueChange={(event) => choose(event.value)} lazyMount>
+      <DogTabList />
+      <Tabs.Content value="dog" pt="6">
+        <Stack gap="8">
+          <Stack gap="4">
+            <DogForm
+              initial={dogToForm(dog)}
+              submitLabel="Save dog"
+              pending={update.isPending}
+              error={update.isError ? errorMessage(update.error) : undefined}
+              onSubmit={(input) => update.mutate(input)}
+            />
+            <Text role="status" aria-live="polite">
+              {update.isSuccess && !update.isPending ? 'Dog saved.' : ''}
+            </Text>
+          </Stack>
+          <Separator />
+          <DeleteDog dog={dog} />
+        </Stack>
+      </Tabs.Content>
+      <Tabs.Content value="photos" pt="6">
+        <PhotoEditor dog={dog} />
+      </Tabs.Content>
+      <Tabs.Content value="care" pt="6">
+        <CareEditor dogId={dog.id} />
+      </Tabs.Content>
+    </Tabs.Root>
   )
 }
 
