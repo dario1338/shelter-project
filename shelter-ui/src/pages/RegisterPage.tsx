@@ -59,7 +59,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <Stack gap="6" maxW="md" w="full" mx="auto">
+    <Stack gap="6" maxW="md" w="full" mx="auto" pt={{ base: '4', md: '16' }}>
       <Heading as="h1" size="2xl" textAlign="center">
         Create account
       </Heading>
