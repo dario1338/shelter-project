@@ -4,15 +4,16 @@ import type { Dog } from '../api/dogs'
 import { DogImage } from './DogImage'
 
 // The photo of the dog on its page: the chosen photo large, and a row of small ones to choose from
-// when there are several. The first photo is shown until another one is chosen.
+// when there are several. The first photo is shown until another one is chosen. The photo keeps one shape
+// (3:2) and the gallery is at most 36rem wide, so that a wide screen does not stretch it into a strip.
 export function DogGallery({ dog }: Readonly<{ dog: Dog }>) {
   const [chosenId, setChosenId] = useState<number | null>(null)
   const photos = dog.images
   const shown = photos.find((photo) => photo.id === chosenId) ?? photos[0]
 
   return (
-    <Stack gap="3">
-      <DogImage name={dog.name} src={shown?.url} h="80" borderRadius="md" />
+    <Stack gap="3" maxW="xl" w="full">
+      <DogImage name={dog.name} src={shown?.url} aspectRatio="3 / 2" borderRadius="md" />
       {photos.length > 1 && (
         <HStack gap="2" wrap="wrap">
           {photos.map((photo, index) => (

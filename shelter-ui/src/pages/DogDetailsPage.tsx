@@ -11,6 +11,9 @@ import { StatusBadge } from '../dogs/StatusBadge'
 import { useDog } from '../dogs/useDogs'
 import { ErrorAlert } from '../ui/ErrorAlert'
 
+// The photo keeps its width on a wide screen, and the text sits next to it instead of in the middle.
+const DETAILS_COLUMNS = { base: '1fr', md: '1fr 1fr', xl: 'minmax(0, 36rem) minmax(0, 1fr)' }
+
 function NotFound({ backTo }: Readonly<{ backTo: string }>) {
   return (
     <Stack gap="4" align="start">
@@ -52,11 +55,11 @@ export default function DogDetailsPage() {
       )}
 
       {dog.isPending && (
-        <SimpleGrid columns={{ base: 1, md: 2 }} gap="8" aria-busy="true">
+        <SimpleGrid templateColumns={DETAILS_COLUMNS} gap="8" aria-busy="true">
           <Text role="status" srOnly>
             Loading the dog…
           </Text>
-          <Skeleton h="80" borderRadius="md" />
+          <Skeleton aspectRatio="3 / 2" maxW="xl" borderRadius="md" />
           <Stack gap="4">
             <Skeleton h="10" />
             <Skeleton h="6" />
@@ -66,7 +69,7 @@ export default function DogDetailsPage() {
       )}
 
       {dog.data && (
-        <SimpleGrid columns={{ base: 1, md: 2 }} gap="8">
+        <SimpleGrid templateColumns={DETAILS_COLUMNS} gap="8">
           <DogGallery dog={dog.data} />
           <Stack gap="4" align="start">
             <Heading as="h1" size="2xl">
