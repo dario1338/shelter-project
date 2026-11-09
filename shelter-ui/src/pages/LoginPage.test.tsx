@@ -1,6 +1,7 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearAccessToken } from '../auth/tokenStore'
+import { dogPage } from '../test/dogs'
 import { jsonResponse } from '../test/http'
 import { renderApp } from '../test/renderApp'
 import { ana } from '../test/users'
@@ -12,6 +13,8 @@ beforeEach(() => {
   fetchMock.mockReset()
   vi.stubGlobal('fetch', fetchMock)
   // Opening the page first tries to restore a session; there is none.
+  // The home page, where a signed-in visitor lands, lists the newest dogs.
+  fetchMock.mockImplementation(async () => jsonResponse(200, dogPage([])))
   fetchMock.mockResolvedValueOnce(new Response(null, { status: 401 }))
 })
 
@@ -43,7 +46,7 @@ describe('LoginPage', () => {
     fill('Password', 'secret123')
     submit()
 
-    expect(await screen.findByText('Signed in as ana@example.com')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Sign out' })).toBeInTheDocument()
     const loginCall = fetchMock.mock.calls[1]
     expect(loginCall[0]).toBe('/api/auth/login')
     expect(JSON.parse(loginCall[1]?.body as string)).toEqual({

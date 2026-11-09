@@ -59,8 +59,8 @@ export default function RegisterPage() {
   }
 
   return (
-    <Stack gap="6" maxW="md">
-      <Heading as="h1" size="2xl">
+    <Stack gap="6" maxW="md" w="full" mx="auto">
+      <Heading as="h1" size="2xl" textAlign="center">
         Create account
       </Heading>
       <chakra.form noValidate onSubmit={handleSubmit}>
@@ -104,7 +104,7 @@ export default function RegisterPage() {
           </Button>
         </Stack>
       </chakra.form>
-      <Text>
+      <Text textAlign="center">
         Already have an account?{' '}
         <Link asChild variant="underline">
           <RouterLink to="/login" state={location.state}>Sign in</RouterLink>

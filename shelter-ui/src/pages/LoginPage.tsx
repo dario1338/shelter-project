@@ -45,8 +45,8 @@ export default function LoginPage() {
   }
 
   return (
-    <Stack gap="6" maxW="md">
-      <Heading as="h1" size="2xl">
+    <Stack gap="6" maxW="md" w="full" mx="auto">
+      <Heading as="h1" size="2xl" textAlign="center">
         Sign in
       </Heading>
       <chakra.form noValidate onSubmit={handleSubmit}>
@@ -73,7 +73,7 @@ export default function LoginPage() {
           </Button>
         </Stack>
       </chakra.form>
-      <Text>
+      <Text textAlign="center">
         No account yet?{' '}
         <Link asChild variant="underline">
           <RouterLink to="/register" state={location.state}>Create one</RouterLink>

@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { fetchDog, fetchDogs, type DogListParams } from '../api/dogs'
+import { fetchDog, fetchDogs, fetchLatestAvailableDogs, type DogListParams } from '../api/dogs'
 
 export function useDogs(params: DogListParams) {
   return useQuery({
@@ -15,5 +15,13 @@ export function useDog(id: number | null) {
     queryKey: ['dog', id],
     queryFn: ({ signal }) => fetchDog(id as number, signal),
     enabled: id !== null,
+  })
+}
+
+// Under 'dogs', so that a change of a dog fetches the home page's list again as well.
+export function useLatestAvailableDogs() {
+  return useQuery({
+    queryKey: ['dogs', 'latest'],
+    queryFn: ({ signal }) => fetchLatestAvailableDogs(signal),
   })
 }
