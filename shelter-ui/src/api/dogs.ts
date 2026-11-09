@@ -63,6 +63,20 @@ export async function fetchDogs(params: DogListParams, signal?: AbortSignal): Pr
   return (await response.json()) as DogPage
 }
 
+// How many dogs the home page shows.
+export const HOME_DOG_COUNT = 6
+
+// The dogs that were added last and still look for a sponsor. The id grows with every new dog,
+// so the highest ids are the newest.
+export async function fetchLatestAvailableDogs(signal?: AbortSignal): Promise<DogPage> {
+  const query = new URLSearchParams({ page: '0', size: String(HOME_DOG_COUNT), status: 'AVAILABLE', sort: 'id,desc' })
+  const response = await apiFetch(`/api/dogs?${query.toString()}`, { signal })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+  return (await response.json()) as DogPage
+}
+
 export async function fetchDog(id: number, signal?: AbortSignal): Promise<Dog> {
   const response = await apiFetch(`/api/dogs/${id}`, { signal })
   if (!response.ok) {

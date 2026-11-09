@@ -1,6 +1,7 @@
 import { fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearAccessToken } from '../auth/tokenStore'
+import { dogPage } from '../test/dogs'
 import { jsonResponse } from '../test/http'
 import { renderApp } from '../test/renderApp'
 import { ana } from '../test/users'
@@ -11,6 +12,8 @@ beforeEach(() => {
   clearAccessToken()
   fetchMock.mockReset()
   vi.stubGlobal('fetch', fetchMock)
+  // The home page, where a signed-in visitor lands, lists the newest dogs.
+  fetchMock.mockImplementation(async () => jsonResponse(200, dogPage([])))
   fetchMock.mockResolvedValueOnce(new Response(null, { status: 401 }))
 })
 
@@ -49,7 +52,7 @@ describe('RegisterPage', () => {
     fillValidForm()
     submit()
 
-    expect(await screen.findByText('Signed in as ana@example.com')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Sign out' })).toBeInTheDocument()
     const [registerUrl, registerInit] = fetchMock.mock.calls[1]
     expect(registerUrl).toBe('/api/auth/register')
     expect(JSON.parse(registerInit?.body as string)).toEqual({
