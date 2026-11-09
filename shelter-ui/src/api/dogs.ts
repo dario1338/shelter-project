@@ -64,7 +64,7 @@ export async function fetchDogs(params: DogListParams, signal?: AbortSignal): Pr
 }
 
 // How many dogs the home page shows.
-export const HOME_DOG_COUNT = 6
+export const HOME_DOG_COUNT = 5
 
 // The dogs that were added last and still look for a sponsor. The id grows with every new dog,
 // so the highest ids are the newest.

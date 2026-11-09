@@ -12,7 +12,7 @@ function serve(dogs: Response | (() => Response)) {
 }
 
 describe('home page', () => {
-  it('welcomes the visitor and shows the newest dogs that look for a sponsor', async () => {
+  it('welcomes the visitor and shows the newest dogs that look for a sponsor, without a button for the rest', async () => {
     serve(() => jsonResponse(200, dogPage([dog({ id: 5, name: 'Luna' }), dog({ id: 4, name: 'Rex' })])))
 
     renderApp()
@@ -22,16 +22,17 @@ describe('home page', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Welcome to Shelter')
     expect(screen.getByText(/Help dogs find their forever home/)).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Meet our dogs' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'See all dogs' })).not.toBeInTheDocument()
   })
 
-  it('asks the API for the six newest dogs that are available', async () => {
+  it('asks the API for the five newest dogs that are available', async () => {
     serve(() => jsonResponse(200, dogPage([])))
 
     renderApp()
     await screen.findByText(/No dog is looking for a sponsor/)
 
     const url = new URL(String(fetchMock.mock.calls.find(([address]) => String(address).startsWith('/api/dogs'))![0]), 'http://x')
-    expect(url.searchParams.get('size')).toBe('6')
+    expect(url.searchParams.get('size')).toBe('5')
     expect(url.searchParams.get('status')).toBe('AVAILABLE')
     expect(url.searchParams.get('sort')).toBe('id,desc')
   })
@@ -42,7 +43,6 @@ describe('home page', () => {
     renderApp()
 
     expect(await screen.findByText('No dog is looking for a sponsor right now. Please come back soon.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'See all dogs' })).toHaveAttribute('href', '/dogs')
   })
 
   it('shows the reason and tries again when the dogs cannot be loaded', async () => {

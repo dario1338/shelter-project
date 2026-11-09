@@ -10,7 +10,7 @@ import { StatusFilter } from '../dogs/StatusFilter'
 import { useDogs } from '../dogs/useDogs'
 import { ErrorAlert } from '../ui/ErrorAlert'
 
-const GRID_COLUMNS = { base: 1, sm: 2, md: 3, xl: 4 }
+const GRID_COLUMNS = { base: 1, sm: 2, md: 3, xl: 4, '2xl': 5 }
 
 // Fixed names, so that the placeholders have stable keys.
 const SKELETON_KEYS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l']
