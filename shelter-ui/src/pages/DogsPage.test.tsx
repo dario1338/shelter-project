@@ -4,6 +4,7 @@ import { dog, dogPage } from '../test/dogs'
 import { setUpFetchMock } from '../test/fetchMock'
 import { jsonResponse, routeFetch } from '../test/http'
 import { renderApp } from '../test/renderApp'
+import { veryWideScreen } from '../test/screen'
 
 const fetchMock = setUpFetchMock()
 
@@ -15,6 +16,25 @@ function dogRequests(): URL[] {
 }
 
 describe('DogsPage', () => {
+  it('asks for twelve dogs a page, which fill the rows of three and four', async () => {
+    routeFetch(fetchMock, { '/api/dogs': () => jsonResponse(200, dogPage([dog()])) })
+
+    renderApp('/dogs')
+    await screen.findByRole('link', { name: 'Rex' })
+
+    expect(dogRequests()[0].searchParams.get('size')).toBe('12')
+  })
+
+  it('asks for fifteen dogs a page on a very large monitor, which fill three rows of five', async () => {
+    veryWideScreen()
+    routeFetch(fetchMock, { '/api/dogs': () => jsonResponse(200, dogPage([dog()])) })
+
+    renderApp('/dogs')
+    await screen.findByRole('link', { name: 'Rex' })
+
+    expect(dogRequests()[0].searchParams.get('size')).toBe('15')
+  })
+
   it('lists the dogs with their details and a link to each', async () => {
     routeFetch(fetchMock, {
       '/api/dogs': () =>

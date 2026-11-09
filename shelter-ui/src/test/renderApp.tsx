@@ -1,10 +1,11 @@
-import { ChakraProvider, defaultSystem } from '@chakra-ui/react'
+import { ChakraProvider } from '@chakra-ui/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import App from '../App'
 import { AuthProvider } from '../auth/AuthProvider'
 import { ColorModeProvider } from '../ui/ColorModeProvider'
+import { system } from '../ui/system'
 
 // Renders the whole application at a path, the way main.tsx does (without the browser router).
 export function renderApp(path = '/') {
@@ -12,7 +13,7 @@ export function renderApp(path = '/') {
   // off, because a failed call should show its error at once.
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <ChakraProvider value={defaultSystem}>
+    <ChakraProvider value={system}>
       <ColorModeProvider>
         <QueryClientProvider client={queryClient}>
           <MemoryRouter initialEntries={[path]}>
