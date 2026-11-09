@@ -12,7 +12,7 @@ import { useDogs } from '../dogs/useDogs'
 import { ErrorAlert } from '../ui/ErrorAlert'
 import { useMediaQuery, VERY_WIDE } from '../ui/screens'
 
-const GRID_COLUMNS = { base: 1, sm: 2, md: 3, xl: 4, '3xl': 5 }
+const GRID_COLUMNS = { base: 1, sm: 2, md: 3, xl: 4, '2xl': 5 }
 
 // Fixed names, so that the placeholders have stable keys.
 const SKELETON_KEYS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l']
@@ -34,7 +34,7 @@ export default function DogsPage() {
   const [search, setSearch] = useSearchParams()
   const { state } = useAuth()
   const view = readListView(search)
-  // A very large monitor shows five dogs in a row, and a page of fifteen fills three rows of them.
+  // A wide screen shows five dogs in a row, and a page of fifteen fills three rows of them.
   const size = useMediaQuery(VERY_WIDE) ? WIDE_DOG_PAGE_SIZE : undefined
   const dogs = useDogs({ page: view.page - 1, status: view.status, size })
 

@@ -25,14 +25,14 @@ describe('home page', () => {
     expect(screen.queryByRole('link', { name: 'See all dogs' })).not.toBeInTheDocument()
   })
 
-  it('asks the API for the ten newest dogs that are available', async () => {
+  it('asks the API for the five newest dogs that are available', async () => {
     serve(() => jsonResponse(200, dogPage([])))
 
     renderApp()
     await screen.findByText(/No dog is looking for a sponsor/)
 
     const url = new URL(String(fetchMock.mock.calls.find(([address]) => String(address).startsWith('/api/dogs'))![0]), 'http://x')
-    expect(url.searchParams.get('size')).toBe('10')
+    expect(url.searchParams.get('size')).toBe('5')
     expect(url.searchParams.get('status')).toBe('AVAILABLE')
     expect(url.searchParams.get('sort')).toBe('id,desc')
   })

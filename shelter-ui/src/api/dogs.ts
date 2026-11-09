@@ -33,7 +33,7 @@ export interface DogPage {
   }
 }
 
-// 12 fills the rows of three and four dogs; 15 fills the rows of five, shown on a very large monitor.
+// 12 fills the rows of three and four dogs; 15 fills the rows of five, shown on a wide screen (from 1536 px).
 export const DOG_PAGE_SIZE = 12
 export const WIDE_DOG_PAGE_SIZE = 15
 
@@ -68,7 +68,7 @@ export async function fetchDogs(params: DogListParams, signal?: AbortSignal): Pr
 }
 
 // How many dogs the home page shows.
-export const HOME_DOG_COUNT = 10
+export const HOME_DOG_COUNT = 5
 
 // The dogs that were added last and still look for a sponsor. The id grows with every new dog,
 // so the highest ids are the newest.

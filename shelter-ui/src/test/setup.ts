@@ -8,7 +8,7 @@ afterEach(() => {
 })
 
 // jsdom has no matchMedia. By default no media query matches, so the screen is an ordinary wide one (a
-// laptop); a test that needs a phone or a very large monitor says so with the helpers of test/screen.ts.
+// laptop); a test that needs a phone or a wide screen says so with the helpers of test/screen.ts.
 export interface Screen {
   narrow?: boolean
   veryWide?: boolean

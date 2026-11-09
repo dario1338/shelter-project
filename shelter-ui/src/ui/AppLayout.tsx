@@ -6,9 +6,9 @@ import { PawIcon } from './PawIcon'
 import { COMPACT, useMediaQuery } from './screens'
 import { useColorMode } from './useColorMode'
 
-// The content is up to 1280 px wide, and up to 1600 px on a very large monitor, where there is room for a
+// The content is up to 1280 px wide, and up to 1600 px on a wide screen (from 1536 px), where there is room for a
 // fifth dog in a row. The header uses the same width, so the two line up.
-const CONTENT_WIDTH = { base: '7xl', '3xl': '100rem' }
+const CONTENT_WIDTH = { base: '7xl', '2xl': '100rem' }
 
 function SunIcon() {
   return (

@@ -7,10 +7,10 @@ import { ErrorAlert } from '../ui/ErrorAlert'
 import { PawIcon } from '../ui/PawIcon'
 
 // The same columns as the list of dogs.
-const GRID_COLUMNS = { base: 1, sm: 2, md: 3, xl: 4, '3xl': 5 }
+const GRID_COLUMNS = { base: 1, sm: 2, md: 3, xl: 4, '2xl': 5 }
 
-// How many dogs the home page shows depends on the screen: two on a phone, then one row of three or four,
-// and on a very large monitor two rows of five. The API sends the most that any screen shows, and the dogs
+// The home page shows one row of dogs, and how many fit in it depends on the screen: two on a phone, then
+// three, four and, on a wide screen (from 1536 px), five. The API sends the most that any screen shows, and the dogs
 // that a screen has no room for are hidden. Hidden cards are not in the tab order either.
 function visibleFrom(index: number) {
   const shown = 'block'
@@ -19,12 +19,12 @@ function visibleFrom(index: number) {
     base: index < 2 ? shown : hidden,
     md: index < 3 ? shown : hidden,
     xl: index < 4 ? shown : hidden,
-    '3xl': shown,
+    '2xl': shown,
   }
 }
 
 // Fixed names, so that the placeholders have stable keys.
-const SKELETON_KEYS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'].slice(0, HOME_DOG_COUNT)
+const SKELETON_KEYS = ['a', 'b', 'c', 'd', 'e'].slice(0, HOME_DOG_COUNT)
 
 function LatestDogs() {
   const dogs = useLatestAvailableDogs()

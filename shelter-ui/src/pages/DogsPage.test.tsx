@@ -25,7 +25,7 @@ describe('DogsPage', () => {
     expect(dogRequests()[0].searchParams.get('size')).toBe('12')
   })
 
-  it('asks for fifteen dogs a page on a very large monitor, which fill three rows of five', async () => {
+  it('asks for fifteen dogs a page on a wide screen, which fill three rows of five', async () => {
     veryWideScreen()
     routeFetch(fetchMock, { '/api/dogs': () => jsonResponse(200, dogPage([dog()])) })
 
