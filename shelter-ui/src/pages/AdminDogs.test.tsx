@@ -41,7 +41,7 @@ describe('adding a dog', () => {
     expect(fetchMock.mock.calls.some(([url, init]) => String(url) === '/api/dogs' && init?.method === 'POST')).toBe(false)
   })
 
-  it('creates the dog and moves on to its edit page, where the care details can be added', async () => {
+  it('creates the dog and moves on to the photos of its edit page', async () => {
     routeFetch(fetchMock, {
       ...session(),
       '/api/dogs/9/care': () => jsonResponse(200, noCare),
@@ -55,6 +55,7 @@ describe('adding a dog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add dog' }))
 
     expect(await screen.findByRole('heading', { name: 'Edit Luna' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('Add photos')).toBeInTheDocument()
     expect(bodyOf('/api/dogs', 'POST')).toEqual({
       name: 'Luna',
       breed: null,
@@ -111,7 +112,7 @@ describe('editing a dog', () => {
   it('shows the care details and saves a changed set, vaccinations included', async () => {
     routeFetch(fetchMock, { ...session(), ...careRoute(), '/api/dogs/4': () => jsonResponse(200, dog({ id: 4 })) })
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=care')
     expect(await screen.findByLabelText('Microchip number')).toHaveValue('900123')
     expect(screen.getByLabelText(/Internal note/)).toHaveValue('Bites strangers')
     fireEvent.click(screen.getByRole('button', { name: 'Add vaccination' }))
@@ -133,7 +134,7 @@ describe('editing a dog', () => {
   it('does not send a vaccination without a name or date', async () => {
     routeFetch(fetchMock, { ...session(), ...careRoute(noCare), '/api/dogs/4': () => jsonResponse(200, dog({ id: 4 })) })
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=care')
     fireEvent.click(await screen.findByRole('button', { name: 'Add vaccination' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save care details' }))
 
@@ -145,7 +146,7 @@ describe('editing a dog', () => {
   it('removes a vaccination', async () => {
     routeFetch(fetchMock, { ...session(), ...careRoute(), '/api/dogs/4': () => jsonResponse(200, dog({ id: 4 })) })
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=care')
     fireEvent.click(await screen.findByRole('button', { name: 'Remove vaccination 1' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save care details' }))
 
@@ -160,7 +161,7 @@ describe('editing a dog', () => {
       '/api/dogs/4': () => jsonResponse(200, dog({ id: 4 })),
     })
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=care')
 
     expect(await screen.findByText('Boom')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save care details' })).not.toBeInTheDocument()
@@ -233,7 +234,7 @@ describe('care details on the dog page', () => {
     expect(screen.getByText('Rabies')).toBeInTheDocument()
     expect(screen.getByText('5 Jan 2026')).toBeInTheDocument()
     expect(screen.getByText('Bites strangers')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Edit care details' })).toHaveAttribute('href', '/admin/dogs/7/edit')
+    expect(screen.getByRole('link', { name: 'Edit care details' })).toHaveAttribute('href', '/admin/dogs/7/edit?tab=care')
     expect(screen.getByRole('link', { name: 'Edit dog' })).toHaveAttribute('href', '/admin/dogs/7/edit')
   })
 

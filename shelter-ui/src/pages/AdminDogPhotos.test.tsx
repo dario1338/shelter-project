@@ -59,7 +59,7 @@ describe('photos on the edit page', () => {
   it('shows the photos of the dog, the first as the main one', async () => {
     serveDog([photo(11), photo(12)])
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=photos')
 
     expect(await screen.findByRole('img', { name: 'Photo 1 of Rex' })).toHaveAttribute('src', 'https://files/11.jpg')
     expect(screen.getByRole('img', { name: 'Photo 2 of Rex' })).toBeInTheDocument()
@@ -70,7 +70,7 @@ describe('photos on the edit page', () => {
   it('says when the dog has no photos', async () => {
     serveDog([])
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=photos')
 
     expect(await screen.findByText('This dog has no photos yet.')).toBeInTheDocument()
   })
@@ -78,7 +78,7 @@ describe('photos on the edit page', () => {
   it('uploads the chosen files one after another and shows them', async () => {
     serveDog([photo(11)])
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=photos')
     await screen.findByRole('img', { name: 'Photo 1 of Rex' })
     choose([jpeg('a.jpg'), jpeg('b.jpg')])
 
@@ -90,7 +90,7 @@ describe('photos on the edit page', () => {
   it('does nothing when no file is chosen', async () => {
     serveDog([])
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=photos')
     await screen.findByText('This dog has no photos yet.')
     choose([])
 
@@ -101,7 +101,7 @@ describe('photos on the edit page', () => {
   it('does not send a file that is not a JPEG or PNG image', async () => {
     serveDog([])
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=photos')
     await screen.findByText('This dog has no photos yet.')
     choose([new File(['x'], 'notes.txt', { type: 'text/plain' })])
 
@@ -114,7 +114,7 @@ describe('photos on the edit page', () => {
     const big = jpeg('big.jpg')
     Object.defineProperty(big, 'size', { value: 6 * 1024 * 1024 })
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=photos')
     await screen.findByText('This dog has no photos yet.')
     choose([big])
 
@@ -125,7 +125,7 @@ describe('photos on the edit page', () => {
   it('does not send more photos than the dog can have', async () => {
     serveDog([photo(1), photo(2), photo(3), photo(4), photo(5)])
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=photos')
     await screen.findByRole('img', { name: 'Photo 5 of Rex' })
     choose([jpeg('a.jpg'), jpeg('b.jpg')])
 
@@ -136,7 +136,7 @@ describe('photos on the edit page', () => {
   it('offers no upload when the dog has the most photos it can have', async () => {
     serveDog([photo(1), photo(2), photo(3), photo(4), photo(5), photo(6)])
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=photos')
 
     expect(await screen.findByText(/has the most photos it can have/)).toBeInTheDocument()
     expect(screen.queryByLabelText('Add photos')).not.toBeInTheDocument()
@@ -145,7 +145,7 @@ describe('photos on the edit page', () => {
   it('stops at the first refusal and says what was added before it', async () => {
     serveDog([], { upload: (name) => (name === 'bad.jpg' ? jsonResponse(400, { detail: 'The file is not a valid JPEG or PNG image' }) : jsonResponse(201, {})) })
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=photos')
     await screen.findByText('This dog has no photos yet.')
     choose([jpeg('good.jpg'), jpeg('bad.jpg'), jpeg('later.jpg')])
 
@@ -156,7 +156,7 @@ describe('photos on the edit page', () => {
   it('asks before it deletes a photo, and deletes it when confirmed', async () => {
     serveDog([photo(11), photo(12)])
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=photos')
     fireEvent.click(await screen.findByRole('button', { name: 'Delete photo 2' }))
     expect(screen.getByText('Delete this photo?')).toBeInTheDocument()
     expect(calls('DELETE', '/api/dogs/4/images/12')).toBe(0)
@@ -170,7 +170,7 @@ describe('photos on the edit page', () => {
   it('keeps the photo when the administrator changes their mind', async () => {
     serveDog([photo(11)])
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=photos')
     fireEvent.click(await screen.findByRole('button', { name: 'Delete photo 1' }))
     fireEvent.click(screen.getByRole('button', { name: 'Keep it' }))
 
@@ -188,7 +188,7 @@ describe('photos on the edit page', () => {
       '/api/dogs/4': () => jsonResponse(200, dog({ id: 4, name: 'Rex', images: [photo(11)], primaryImageUrl: photo(11).url })),
     })
 
-    renderApp('/admin/dogs/4/edit')
+    renderApp('/admin/dogs/4/edit?tab=photos')
     fireEvent.click(await screen.findByRole('button', { name: 'Delete photo 1' }))
     fireEvent.click(screen.getByRole('button', { name: 'Yes, delete' }))
 
