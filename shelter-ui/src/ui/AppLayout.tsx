@@ -37,7 +37,7 @@ function ColorModeToggle() {
 // The page that is open is marked by the router (aria-current), and shown in a heavier weight.
 function NavItem({ to, children }: Readonly<{ to: string; children: ReactNode }>) {
   return (
-    <Link asChild _currentPage={{ fontWeight: 'semibold' }}>
+    <Link asChild fontSize={{ base: 'sm', sm: 'md' }} _currentPage={{ fontWeight: 'semibold' }}>
       <NavLink to={to}>{children}</NavLink>
     </Link>
   )
@@ -95,9 +95,9 @@ export default function AppLayout() {
   return (
     <Box minH="100vh">
       <Box as="header" borderBottomWidth="1px">
-        <Container maxW="5xl">
+        <Container maxW="7xl">
           <Flex align="center" justify="space-between" py="3" columnGap="4" rowGap="2" wrap="wrap">
-            <HStack as="nav" aria-label="Main" gap="5" wrap="wrap">
+            <HStack as="nav" aria-label="Main" gap={{ base: '3', sm: '5' }} wrap="wrap">
               <Link asChild fontWeight="bold" fontSize="lg" color="purple.fg">
                 <RouterLink to="/">
                   <PawIcon size={22} />
@@ -113,7 +113,7 @@ export default function AppLayout() {
           </Flex>
         </Container>
       </Box>
-      <Container as="main" maxW="5xl" py="8">
+      <Container as="main" maxW="7xl" py="8">
         <Outlet />
       </Container>
     </Box>
