@@ -7,6 +7,7 @@ import { useAuth } from '../auth/useAuth'
 import { validateEmail, validateName, validateNewPassword } from '../auth/validation'
 import { ErrorAlert } from '../ui/ErrorAlert'
 import { FormField } from '../ui/FormField'
+import { PasswordField } from '../ui/PasswordField'
 
 interface FieldErrors {
   firstName?: string
@@ -88,9 +89,8 @@ export default function RegisterPage() {
             onChange={setEmail}
             error={errors.email}
           />
-          <FormField
+          <PasswordField
             label="Password"
-            type="password"
             autoComplete="new-password"
             value={password}
             onChange={setPassword}
