@@ -338,6 +338,7 @@ pipeline {
                             sh "docker build --pull --no-cache --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
                             trivyScan(checkTag)
                             sh "docker run --rm -e API_UPSTREAM=example.com -e UI_UPSTREAM=example.com ${checkTag} nginx -t"
+                            sh "sh ./verify.sh ${checkTag} ${env.GIT_COMMIT}"
                         } finally {
                             sh "docker rmi -f ${checkTag} || true"
                         }
