@@ -21,8 +21,10 @@ get() {
 }
 
 # The whole answer to a path, headers included, also when it is an error (wget shows no headers then).
+# The busy-box nc closes the connection as soon as its input ends, so the input is held open for a few
+# seconds, which is longer than the proxy needs to answer; nc ends when the proxy closes the connection.
 headers() {
-  printf 'GET %s HTTP/1.0\r\nHost: check\r\n\r\n' "$1" | docker exec -i "$name" timeout 20 nc 127.0.0.1 8080 || true
+  { printf 'GET %s HTTP/1.0\r\nHost: check\r\n\r\n' "$1"; sleep 7; } | docker exec -i "$name" timeout 15 nc 127.0.0.1 8080 || true
 }
 
 fail() {
