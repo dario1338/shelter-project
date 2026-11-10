@@ -11,8 +11,18 @@ server {
     # A sleeping free instance needs ~2 minutes to wake up
     proxy_read_timeout 180s;
 
+    # The addresses of the API and the UI are looked up again every 30 seconds, not only when nginx starts,
+    # so a change of the address of a service does not stop the traffic until the proxy is restarted.
+    # This works because the upstreams are variables below. The DNS servers come from /etc/resolv.conf
+    # (NGINX_ENTRYPOINT_LOCAL_RESOLVERS in the Dockerfile).
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=30s ipv6=off;
+    resolver_timeout 5s;
+    set $api_upstream ${API_UPSTREAM};
+    set $ui_upstream ${UI_UPSTREAM};
+
     # Render health check target, independent of the upstream state
     location = /proxy-health {
+        include /etc/nginx/snippets/security-headers.conf;
         access_log off;
         default_type text/plain;
         return 200 'ok';
@@ -20,6 +30,7 @@ server {
 
     # The commit of this image, for the delivery pipeline.
     location = /proxy-version {
+        include /etc/nginx/snippets/security-headers.conf;
         access_log off;
         default_type application/json;
         add_header Cache-Control 'no-store' always;
@@ -30,17 +41,25 @@ server {
     # to wake that instance up directly: the platform does not wake a sleeping free instance for
     # requests that come from another service, such as this proxy, but it does for requests from outside.
     location = /api-host {
+        include /etc/nginx/snippets/security-headers.conf;
         access_log off;
         default_type text/plain;
         add_header Cache-Control 'no-store' always;
         return 200 '${API_UPSTREAM}';
     }
 
-    # API traffic
+    # API traffic. With a variable in proxy_pass and no path after it, nginx passes the request path and
+    # query as the client sent them.
     location ^~ /api/ {
-        # Photo uploads are up to 5 MB (the API enforces that); nginx would stop anything above 1 MB by default.
-        client_max_body_size 6m;
-        proxy_pass https://${API_UPSTREAM};
+        # The headers of the proxy replace the ones the service sends, so that each is sent once.
+        proxy_hide_header X-Content-Type-Options;
+        proxy_hide_header X-Frame-Options;
+        proxy_hide_header Referrer-Policy;
+        proxy_hide_header Permissions-Policy;
+        include /etc/nginx/snippets/security-headers.conf;
+
+        proxy_pass https://$api_upstream;
+        proxy_ssl_name ${API_UPSTREAM};
         proxy_set_header Host ${API_UPSTREAM};
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
@@ -49,7 +68,14 @@ server {
 
     # Everything else (the single-page application)
     location / {
-        proxy_pass https://${UI_UPSTREAM};
+        proxy_hide_header X-Content-Type-Options;
+        proxy_hide_header X-Frame-Options;
+        proxy_hide_header Referrer-Policy;
+        proxy_hide_header Permissions-Policy;
+        include /etc/nginx/snippets/security-headers.conf;
+
+        proxy_pass https://$ui_upstream;
+        proxy_ssl_name ${UI_UPSTREAM};
         proxy_set_header Host ${UI_UPSTREAM};
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
