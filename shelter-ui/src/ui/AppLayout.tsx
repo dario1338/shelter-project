@@ -2,6 +2,7 @@ import { Box, Button, Container, Flex, HStack, IconButton, Link, Separator, Stac
 import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Link as RouterLink, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import { useSignOut } from '../auth/useSignOut'
 import { PawIcon } from './PawIcon'
 import { COMPACT, useMediaQuery } from './screens'
 import { useColorMode } from './useColorMode'
@@ -89,7 +90,8 @@ function NavItem({ to, children, onClick }: Readonly<{ to: string; children: Rea
 }
 
 function AccountLinks() {
-  const { state, signOut } = useAuth()
+  const { state } = useAuth()
+  const signOut = useSignOut()
 
   if (state.status === 'loading') {
     return null
@@ -109,7 +111,7 @@ function AccountLinks() {
   return (
     <>
       <Text fontSize="sm">{state.user.firstName}</Text>
-      <Button variant="outline" size="sm" onClick={() => void signOut().catch(() => undefined)}>
+      <Button variant="outline" size="sm" onClick={signOut}>
         Sign out
       </Button>
     </>
@@ -140,7 +142,8 @@ function WideHeader() {
 // On a phone: a button that opens the menu on the left, and who is signed in on the right. The menu holds the
 // links and the account actions (sign in, create account, sign out), and closes when one of them is used.
 function CompactHeader() {
-  const { state, signOut } = useAuth()
+  const { state } = useAuth()
+  const signOut = useSignOut()
   const targets = useNavTargets()
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
@@ -197,7 +200,7 @@ function CompactHeader() {
                 size="sm"
                 onClick={() => {
                   close()
-                  void signOut().catch(() => undefined)
+                  signOut()
                 }}
               >
                 Sign out

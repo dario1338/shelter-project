@@ -7,6 +7,7 @@ import { useAuth } from '../auth/useAuth'
 import { validateCurrentPassword, validateEmail } from '../auth/validation'
 import { ErrorAlert } from '../ui/ErrorAlert'
 import { FormField } from '../ui/FormField'
+import { PasswordField } from '../ui/PasswordField'
 
 interface FieldErrors {
   email?: string
@@ -60,9 +61,8 @@ export default function LoginPage() {
             onChange={setEmail}
             error={errors.email}
           />
-          <FormField
+          <PasswordField
             label="Password"
-            type="password"
             autoComplete="current-password"
             value={password}
             onChange={setPassword}
