@@ -20,9 +20,9 @@ get() {
   docker exec "$name" wget -q -T 20 -O - "http://127.0.0.1:8080$1"
 }
 
-# The headers of the answer to a path, also when it is an error.
+# The whole answer to a path, headers included, also when it is an error (wget shows no headers then).
 headers() {
-  docker exec "$name" wget -S -q -T 20 -O /dev/null "http://127.0.0.1:8080$1" 2>&1 || true
+  printf 'GET %s HTTP/1.0\r\nHost: check\r\n\r\n' "$1" | docker exec -i "$name" timeout 20 nc 127.0.0.1 8080 || true
 }
 
 fail() {
@@ -47,7 +47,7 @@ done
 for path in /proxy-health /api-host /api/health; do
   found="$(headers "$path")"
   for header in X-Content-Type-Options X-Frame-Options Referrer-Policy Permissions-Policy; do
-    echo "$found" | grep -qi "^ *$header:" || fail "$header is missing from the answer to $path"
+    echo "$found" | grep -qi "^$header:" || fail "$header is missing from the answer to $path"
   done
 done
 
