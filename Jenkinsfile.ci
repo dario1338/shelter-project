@@ -335,7 +335,7 @@ pipeline {
                         def checkTag = "shelter-proxy:check-${env.GIT_COMMIT.take(7)}"
                         sh "docker rmi -f ${checkTag} || true"
                         try {
-                            sh "docker build --pull --no-cache -t ${checkTag} ."
+                            sh "docker build --pull --no-cache --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
                             trivyScan(checkTag)
                             sh "docker run --rm -e API_UPSTREAM=example.com -e UI_UPSTREAM=example.com ${checkTag} nginx -t"
                         } finally {
@@ -359,7 +359,7 @@ pipeline {
                         def imageTag = "dario1338/shelter-proxy:${env.GIT_COMMIT.take(7)}"
                         sh "docker rmi -f ${imageTag} || true"
                         try {
-                            sh "docker buildx build --pull --no-cache --platform linux/amd64 -t ${imageTag} --load ."
+                            sh "docker buildx build --pull --no-cache --platform linux/amd64 --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${imageTag} --load ."
                             trivyScan(imageTag)
 
                             withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
@@ -381,7 +381,7 @@ pipeline {
         // ---------------------------------------------------------------- Delivery
         // Continuous Delivery: hand every freshly published image over to the delivery pipeline of its
         // component. wait: false, so this build does not hold an executor while the delivery waits for
-        // the approval. The proxy has no delivery pipeline yet.
+        // the approval.
         stage('Trigger API delivery') {
             when {
                 allOf {
@@ -405,6 +405,20 @@ pipeline {
             }
             steps {
                 build job: '/shelter-cd-ui',
+                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT)],
+                      wait: false
+            }
+        }
+
+        stage('Trigger proxy delivery') {
+            when {
+                allOf {
+                    branch 'main'
+                    expression { env.RUN_PROXY == 'true' }
+                }
+            }
+            steps {
+                build job: '/shelter-cd-proxy',
                       parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT)],
                       wait: false
             }

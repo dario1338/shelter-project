@@ -1,7 +1,7 @@
-// Shared helpers for Jenkinsfile.cd, Jenkinsfile.cd.ui and Jenkinsfile.rollback.
-// Loaded with `load 'jenkins/render.groovy'`; call init() once after loading.
-// All functions expect RENDER_KEY to be bound by the caller (withCredentials),
-// except proxyEnvVar() and resolveInstances(), which bind it themselves.
+// Shared helpers of the delivery and rollback pipelines of the API, the UI and the proxy
+// (Jenkinsfile.cd*, Jenkinsfile.rollback*). Loaded with `load 'jenkins/render.groovy'`; call init() once after loading.
+// All functions expect RENDER_KEY to be bound by the caller (withCredentials), except serviceEnvVar(),
+// proxyEnvVar(), resolveInstances() and smokeProxy(), which bind it themselves.
 
 def init() {
     env.RENDER_API  = 'https://api.render.com/v1'
@@ -39,6 +39,16 @@ def useComponent(String name) {
         env.HEALTH_PATH    = '/healthz'
         env.REVISION_PATH  = '/version.json'
         env.SERVED_BY_PATH = '/'
+    } else if (name == 'proxy') {
+        // The proxy is stateless and has one staging and one production service. Both are reached
+        // through their own address, so the "proxy" settings below describe the service itself.
+        env.IMAGE_REPO     = 'docker.io/dario1338/shelter-proxy'
+        env.STAGING_ID     = 'srv-dbpfil3m8hqs73dpc3og'
+        env.STAGING_URL    = 'https://shelter-proxy-staging.onrender.com'
+        env.PROD_ID        = env.PROXY_ID
+        env.PROD_URL       = env.PROXY_URL
+        env.HEALTH_PATH    = '/proxy-health'
+        env.REVISION_PATH  = '/proxy-version'
     } else {
         error "Unknown component '${name}'"
     }
@@ -180,12 +190,12 @@ def servedBy(String baseUrl, String path) {
     """).trim()
 }
 
-// Returns the value of an environment variable of the proxy service, read from the Render API.
-def proxyEnvVar(String key) {
+// Returns the value of an environment variable of a service, read from the Render API.
+def serviceEnvVar(String serviceId, String key) {
     def value = null
     withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
         def out = sh(returnStdout: true, script: """
-            curl -sS -f "${env.RENDER_API}/services/${env.PROXY_ID}/env-vars?limit=100" \
+            curl -sS -f "${env.RENDER_API}/services/${serviceId}/env-vars?limit=100" \
               -H "Authorization: Bearer \$RENDER_KEY"
         """).trim()
         for (entry in readJSON(text: out)) {
@@ -196,9 +206,14 @@ def proxyEnvVar(String key) {
         }
     }
     if (!value) {
-        error "The proxy has no environment variable ${key}"
+        error "The service ${serviceId} has no environment variable ${key}"
     }
     return value.toString()
+}
+
+// The same for the production proxy.
+def proxyEnvVar(String key) {
+    return serviceEnvVar(env.PROXY_ID, key)
 }
 
 // Looks up which instance the proxy is configured to use for the current component and sets
@@ -277,6 +292,57 @@ def smokeUi(String baseUrl) {
     sh "curl -sS -f --max-time 60 '${baseUrl}/' | grep -q 'id=\"root\"'"
     sh "curl -sS -f --max-time 60 '${baseUrl}/some/client/route' | grep -q 'id=\"root\"'"
     echo "UI smoke tests passed for ${baseUrl}"
+}
+
+// Waits until a service answers a path with 2xx, which also wakes it up if it sleeps. A sleeping free-tier
+// service is woken only by a request made to its own address, not by the proxy that forwards to it, so a
+// check made through a proxy has to wake what is behind it first.
+def wakeHost(String host, String path) {
+    timeout(time: 10, unit: 'MINUTES') {
+        waitUntil(initialRecurrencePeriod: 10000) {
+            def code = sh(returnStatus: true, script: "curl -sS -f --max-time 60 'https://${host}${path}' -o /dev/null")
+            if (code != 0) {
+                echo "${host}${path} not answering yet (curl exit code ${code}), retrying"
+                return false
+            }
+            return true
+        }
+    }
+}
+
+// Wakes the API and the UI that a proxy forwards to, read from the configuration of its Render service.
+// Needed before anything is asked of the proxy that reaches them, such as its revision (an old proxy
+// forwards unknown paths to the UI).
+def wakeUpstreams(String proxyServiceId) {
+    wakeHost(serviceEnvVar(proxyServiceId, 'API_UPSTREAM'), '/api/health')
+    wakeHost(serviceEnvVar(proxyServiceId, 'UI_UPSTREAM'), '/healthz')
+}
+
+// Smoke test of a proxy, given its address and the id of its Render service. The two services behind it
+// are woken up, and then the proxy is checked from the outside: its health, which API instance it
+// announces and serves, and that it serves the UI.
+def smokeProxy(String baseUrl, String proxyServiceId) {
+    def apiHost = serviceEnvVar(proxyServiceId, 'API_UPSTREAM')
+    def uiHost = serviceEnvVar(proxyServiceId, 'UI_UPSTREAM')
+    echo "The proxy ${baseUrl} serves the API from ${apiHost} and the UI from ${uiHost}"
+    wakeUpstreams(proxyServiceId)
+
+    sh "curl -sS -f --max-time 60 '${baseUrl}/proxy-health' | grep -qx ok"
+    def announced = sh(returnStdout: true, script: "curl -sS -f --max-time 60 '${baseUrl}/api-host'").trim()
+    if (announced != apiHost) {
+        error "The proxy announces the API host '${announced}', expected '${apiHost}'"
+    }
+    sh "curl -sS -f --max-time 120 '${baseUrl}/api/health' -o /dev/null"
+    def apiServedBy = servedBy(baseUrl, '/api/health')
+    if (apiServedBy != apiHost) {
+        error "The proxy serves the API from '${apiServedBy}', expected '${apiHost}'"
+    }
+    smokeUi(baseUrl)
+    def uiServedBy = servedBy(baseUrl, '/')
+    if (uiServedBy != uiHost) {
+        error "The proxy serves the UI from '${uiServedBy}', expected '${uiHost}'"
+    }
+    echo "Proxy smoke tests passed for ${baseUrl}"
 }
 
 return this

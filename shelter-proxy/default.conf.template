@@ -18,6 +18,14 @@ server {
         return 200 'ok';
     }
 
+    # The commit of this image, for the delivery pipeline.
+    location = /proxy-version {
+        access_log off;
+        default_type application/json;
+        add_header Cache-Control 'no-store' always;
+        return 200 '{"revision":"${PROXY_REVISION}"}';
+    }
+
     # Name of the API instance that currently receives the traffic (blue or green). The browser uses it
     # to wake that instance up directly: the platform does not wake a sleeping free instance for
     # requests that come from another service, such as this proxy, but it does for requests from outside.
