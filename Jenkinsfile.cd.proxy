@@ -1,0 +1,137 @@
+def render
+
+// Continuous delivery of the proxy: staging, approval, production.
+// The proxy is stateless and every request of the application passes through it, so a faulty
+// configuration would take everything down. It is therefore tried in front of the staging services
+// first. Render starts the new instance and routes traffic to it only after its health check passes,
+// and a failed release is undone by deploying the previous image again.
+pipeline {
+    // No pipeline-wide agent: every part that does work allocates its own,
+    // so the manual approval does not hold an executor while it waits.
+    agent none
+
+    parameters {
+        string(name: 'GIT_COMMIT_FULL', defaultValue: '',
+               description: 'Full commit hash (40 characters) of the proxy image to deliver')
+        booleanParam(name: 'TEST_ROLLBACK', defaultValue: false,
+               description: 'TEST ONLY: fail the verification right after the production deploy, to demonstrate the automatic rollback')
+    }
+
+    options {
+        disableConcurrentBuilds()
+        timeout(time: 90, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Staging') {
+            agent { label 'docker' }
+            stages {
+                stage('Load helpers') {
+                    steps {
+                        checkout scm
+                        script {
+                            render = load 'jenkins/render.groovy'
+                            render.init()
+                            render.useComponent('proxy')
+                        }
+                    }
+                }
+
+                stage('Validate parameters') {
+                    steps {
+                        script {
+                            def commit = params.GIT_COMMIT_FULL.trim()
+                            if (!(commit ==~ /^[0-9a-f]{40}$/)) {
+                                error "GIT_COMMIT_FULL must be a full 40-character hash, got: '${commit}'"
+                            }
+                            env.COMMIT_FULL = commit
+                            env.IMAGE_URL = "${env.IMAGE_REPO}:${commit.take(7)}"
+                            echo "Delivering image ${env.IMAGE_URL}"
+                        }
+                    }
+                }
+
+                stage('Staging: deploy') {
+                    steps {
+                        withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
+                            script {
+                                def deployId = render.deployImage(env.STAGING_ID, env.IMAGE_URL)
+                                render.waitForDeploy(env.STAGING_ID, deployId)
+                            }
+                        }
+                    }
+                }
+
+                stage('Staging: verify revision') {
+                    steps {
+                        script {
+                            render.verifyRevision(env.STAGING_URL, env.COMMIT_FULL)
+                        }
+                    }
+                }
+
+                // The staging proxy is in front of the staging API and the staging UI, so this checks
+                // the whole path that a request takes in production, with the new configuration.
+                stage('Staging: smoke tests') {
+                    steps {
+                        script {
+                            render.smokeProxy(env.STAGING_URL, env.STAGING_ID)
+                        }
+                    }
+                }
+            }
+        }
+
+        // No agent here on purpose: waiting for a human must not occupy an executor.
+        stage('Approval') {
+            steps {
+                timeout(time: 30, unit: 'MINUTES') {
+                    input message: "Release ${env.IMAGE_URL} to production?", ok: 'Release'
+                }
+            }
+        }
+
+        // Only one job at a time may change production (API release, UI release, proxy release or rollback).
+        // The lock is taken after the approval so that a waiting release never blocks a rollback.
+        stage('Production release') {
+            agent { label 'docker' }
+            options {
+                lock('shelter-production')
+            }
+            steps {
+                withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
+                    script {
+                        // What production looks like before this release, to be able to restore it.
+                        // The revision is '' when the running image predates /proxy-version.
+                        render.wakeUpstreams(env.PROD_ID)
+                        def previousRevision = render.fetchRevision(env.PROD_URL)
+                        echo "The production proxy reports revision '${previousRevision ?: 'unknown'}'"
+
+                        try {
+                            def deployId = render.deployImage(env.PROD_ID, env.IMAGE_URL)
+                            render.waitForDeploy(env.PROD_ID, deployId)
+                            render.verifyRevision(env.PROD_URL, env.COMMIT_FULL)
+                            render.smokeProxy(env.PROD_URL, env.PROD_ID)
+
+                            if (params.TEST_ROLLBACK) {
+                                error 'TEST_ROLLBACK is set: simulated failure after the production deploy'
+                            }
+                        } catch (e) {
+                            echo "Verification failed (${e.getMessage()}). Restoring the previous state."
+                            if (previousRevision) {
+                                def previousImage = "${env.IMAGE_REPO}:${previousRevision.take(7)}"
+                                def deployId = render.deployImage(env.PROD_ID, previousImage)
+                                render.waitForDeploy(env.PROD_ID, deployId)
+                                render.verifyRevision(env.PROD_URL, previousRevision)
+                                echo "Production proxy restored to ${previousImage}"
+                            } else {
+                                echo 'WARNING: the previous proxy version is unknown (it predates /proxy-version), so the image was not restored.'
+                            }
+                            error "Release failed and was rolled back: ${e.getMessage()}"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
