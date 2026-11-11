@@ -1,0 +1,16 @@
+# Production override: use the volumes and the network that already exist on the server.
+#
+# They were created before Compose was used here (the network is shared with SonarQube), so
+# Compose must treat them as external: it never creates them, never changes them and, above
+# all, never deletes them (not even with "down -v").
+#
+#   docker compose -f compose.yaml -f compose.production.yaml up -d
+networks:
+  ci:
+    external: true
+
+volumes:
+  jenkins_home:
+    external: true
+  jenkins-agent-1-home:
+    external: true
