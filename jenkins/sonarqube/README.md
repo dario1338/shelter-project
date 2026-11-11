@@ -106,6 +106,17 @@ database, so Jenkins needs no change in either direction.
 
 Only after a few days without problems: remove the `*-before-code` containers and the old volumes.
 
+## Status of production
+
+Production has run from these files since 2026-11-11. The data was restored from a dump taken after
+SonarQube was stopped, so the projects, the analysis history, the users and the Jenkins token were
+kept (the token was checked with `api/authentication/validate`). The previous containers
+`sonarqube-before-code` and `sonarqube-db-before-code` and the old volumes (`sonarqube_pg_*`,
+`sonarqube-db-data`) are kept stopped as the way back and are removed after a few quiet days.
+
+On the production server uid 1000 is the user `opc`, so `ls -l` shows the secret file as owned by `opc`;
+the numeric owner (`ls -ln`) is 1000, which is the user inside the SonarQube container.
+
 ## Backup
 
 The database is the only state. Dump it while SonarQube is running (it is a consistent snapshot):
