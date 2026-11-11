@@ -92,21 +92,58 @@ docker compose down -v                         # remove the test completely
 ## Test 2: a copy of the real data on the server (proves migration)
 
 Restore the newest `jenkins_home` backup into a separate volume and start a controller from this
-image on `127.0.0.1:18080` with `JENKINS_HOME_VOLUME=jenkins_home_copy`, a different container
-name, no agent, and secret files with dummy values (the copy contains the real credentials; keep it
-on the server and delete it when done). Check that jobs, build history and parameters are intact.
-The exact commands are given step by step when this test is run.
+image on `127.0.0.1:18080` with a separate Compose project (`-p`), `JENKINS_HOME_VOLUME=jenkins_home_copy`,
+different container and network names, no agent, and secret files with dummy values. The copy
+contains the real credentials until Jenkins replaces them from the secret files, so keep it on the
+server and delete it when done (`docker volume rm`, never `down -v`). Compare the number of builds
+per job with production (`ls /var/jenkins_home/jobs/<job>/builds`), the plugin versions
+(only `job-dsl` may be added), and look at the jobs through an SSH tunnel.
 
-## Migration of production (summary)
+## Requirements on the server
 
-1. Jenkins idle (no build, no delivery waiting for approval). Stop it. Take a fresh backup of
-   `jenkins_home` (this backup is the rollback).
-2. Create the real secret files and `.env` on the server. Generate a new SSH key pair for the
-   agent (`ssh-keygen -t ed25519 -f <dir>/jenkins_agent_key -N ""`); its `.pub` goes to
-   `JENKINS_AGENT_SSH_PUBKEY`.
-3. Rename the old containers (`jenkins`, `jenkins-agent-1`), then `docker compose up -d --build`.
-   Same volumes, same network, same names; port 50000 is no longer published.
-4. Check: login, node online, Sonar reachable, one CI build, one CD run.
+Docker with the Compose plugin v2. On Ubuntu with the distribution's Docker the plugin is a
+separate package: `apt-get install docker-compose-v2` (check first with `apt-get install -s`
+that it only installs that package and upgrades nothing, because a Docker upgrade restarts the
+daemon and with it every container).
+
+To look at a test controller that listens only on `127.0.0.1`, use an SSH tunnel from the
+laptop: `ssh -i <key> -L 18080:127.0.0.1:18080 ubuntu@<server>`, then open `http://localhost:18080`.
+Jenkins warns about a "broken reverse proxy" when the address in the browser differs from
+`SHELTER_JENKINS_URL`; for a tunnelled test that is expected.
+
+## Migration of production
+
+Production uses the volumes and the network that already exist, so it is started with the
+override `compose.production.yaml` (they are `external`: Compose never creates, changes or
+deletes them). Every command below is run as root on the server, from
+`/opt/shelter-jenkins/repo/jenkins/controller`, and starts with
+`docker compose -f compose.yaml -f compose.production.yaml`.
+
+Preparation (no downtime):
+
+1. Clone the repository to `/opt/shelter-jenkins/repo`; create `/opt/shelter-jenkins/secrets`.
+2. Create the secret files without leaving the values in the shell history (`read -rs`), the SSH
+   key pair with `ssh-keygen -t ed25519 -N "" -C jenkins-controller -f jenkins_agent_key`, then
+   `chown 1000:1000` and `chmod 400` on all of them.
+3. Create `.env` (`chmod 600`): no test overrides, `SECRETS_DIR=/opt/shelter-jenkins/secrets`,
+   `JENKINS_AGENT_SSH_PUBKEY` from `jenkins_agent_key.pub`.
+4. `config` must show the production names (`jenkins`, `jenkins-agent-1`, `jenkins_home`,
+   `shelter-ci-network`) and only port 8080. Then `build jenkins`.
+
+Switch (a few minutes of downtime):
+
+5. Jenkins idle: no build running, no delivery waiting for approval.
+6. Stop `jenkins` and `jenkins-agent-1`. Take a fresh backup of `jenkins_home` and test it
+   (`gzip -t`). **This backup is the rollback.**
+7. Rename the stopped containers (`docker rename jenkins jenkins-before-code`, same for the
+   agent), then `up -d`. Port 50000 is no longer published.
+8. Check: login, node `docker-agent-1` online, `authorized_keys` of the agent contains only the
+   new key, one CI build (SonarQube, Docker Hub push), one delivery up to the approval step,
+   and the multibranch scan log shows a GitHub quota of 5000 (a token is in use).
+
+Rollback: stop the new containers and restore the backup into `jenkins_home`, then start the
+renamed ones (`docker rename` back). Only after a few days without problems: remove the renamed
+containers, revoke the old tokens, delete the leftover job `agent-smoke-test`.
 
 ## Updating plugins
 
