@@ -1,0 +1,84 @@
+# Jenkins controller and its build agent. Sonar and its database are not part of this
+# file yet (they run as before, on the same Docker network).
+#
+# Settings that differ per machine come from .env (see .env.example); secrets are files
+# (see README.md), mounted at /run/secrets/<name> and never written to an image or to Git.
+name: shelter-jenkins
+
+services:
+  jenkins:
+    image: shelter-jenkins-controller:${CONTROLLER_TAG:-1}
+    build:
+      context: .
+    container_name: ${JENKINS_CONTAINER:-jenkins}
+    restart: unless-stopped
+    # 8080 only: the inbound agent port (50000) is closed, the agent is started over SSH.
+    ports:
+      - "${JENKINS_BIND:-0.0.0.0}:${JENKINS_PORT:-8080}:8080"
+    environment:
+      # Not secret; used as ${...} in casc/*.yaml. The ":?" makes a missing value an error.
+      JENKINS_ADMIN_ID: ${JENKINS_ADMIN_ID:?set it in .env}
+      SHELTER_JENKINS_URL: ${SHELTER_JENKINS_URL:?set it in .env}
+      GITHUB_USERNAME: ${GITHUB_USERNAME:?set it in .env}
+      DOCKERHUB_USERNAME: ${DOCKERHUB_USERNAME:?set it in .env}
+    volumes:
+      - jenkins_home:/var/jenkins_home
+    secrets:
+      - jenkins_admin_password
+      - github_token
+      - dockerhub_token
+      - sonarqube_token
+      - render_api_key
+      - jenkins_agent_key
+    networks:
+      - ci
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8080/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # The build agent. Same image and settings as the container that runs today.
+  # The service name is the host name the controller connects to (casc/10-agent.yaml).
+  jenkins-agent-1:
+    image: shelter-jenkins-agent:${AGENT_TAG:-3}
+    build:
+      context: ../agent
+      args:
+        DOCKER_GID: ${DOCKER_GID:?set it in .env (getent group docker)}
+    container_name: ${AGENT_CONTAINER:-jenkins-agent-1}
+    restart: unless-stopped
+    environment:
+      # Public key; the private half is the Docker secret jenkins_agent_key.
+      JENKINS_AGENT_SSH_PUBKEY: ${JENKINS_AGENT_SSH_PUBKEY:?set it in .env}
+    volumes:
+      - jenkins-agent-1-home:/home/jenkins
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - ci
+
+networks:
+  ci:
+    # Shared with SonarQube, which is not managed by this file yet.
+    name: ${CI_NETWORK:-shelter-ci-network}
+
+volumes:
+  jenkins_home:
+    name: ${JENKINS_HOME_VOLUME:-jenkins_home}
+  jenkins-agent-1-home:
+    name: ${AGENT_HOME_VOLUME:-jenkins-agent-1-home}
+
+secrets:
+  jenkins_admin_password:
+    file: ${SECRETS_DIR:-./secrets}/jenkins_admin_password
+  github_token:
+    file: ${SECRETS_DIR:-./secrets}/github_token
+  dockerhub_token:
+    file: ${SECRETS_DIR:-./secrets}/dockerhub_token
+  sonarqube_token:
+    file: ${SECRETS_DIR:-./secrets}/sonarqube_token
+  render_api_key:
+    file: ${SECRETS_DIR:-./secrets}/render_api_key
+  jenkins_agent_key:
+    file: ${SECRETS_DIR:-./secrets}/jenkins_agent_key

@@ -1,0 +1,5 @@
+# Jobs are created by Job DSL (plugin job-dsl); JCasC runs the script at start and on reload.
+# The script is a file so it can be read and reviewed as code.
+
+jobs:
+  - file: /usr/share/jenkins/casc/jobs/shelter.groovy

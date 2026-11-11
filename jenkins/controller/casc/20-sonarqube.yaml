@@ -1,0 +1,12 @@
+# Connection to SonarQube (same Docker network, so the container name is the host name).
+
+unclassified:
+  sonarGlobalConfiguration:
+    buildWrapperEnabled: false
+    installations:
+      - name: "sonar-server"
+        serverUrl: "http://sonarqube:9000"
+        credentialsId: "sonarqube-token"
+        triggers:
+          skipScmCause: false
+          skipUpstreamCause: false

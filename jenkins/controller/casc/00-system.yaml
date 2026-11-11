@@ -1,0 +1,35 @@
+# Core settings, security and the public URL. No secrets in this file: ${...} values are
+# resolved at start from environment variables (non-secret) or Docker secrets (/run/secrets).
+
+jenkins:
+  systemMessage: "Configured as code (jenkins/controller/casc in the shelter-project repository). Change it there, not in the UI."
+
+  # The controller only orchestrates; every build runs on the agent (10-agent.yaml).
+  numExecutors: 0
+  mode: NORMAL
+  quietPeriod: 5
+
+  # The agent is started by the controller over SSH, so the inbound agent port (JNLP, 50000)
+  # is not needed. -1 turns it off.
+  slaveAgentPort: -1
+
+  crumbIssuer: "standard"
+  remotingSecurity:
+    enabled: true
+
+  # Local users, no self sign-up. The password comes from a Docker secret.
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_ID}"
+          password: "${jenkins_admin_password}"
+
+  # No anonymous access; every signed-in user has full control (one user at the moment).
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+unclassified:
+  location:
+    url: "${SHELTER_JENKINS_URL}"
