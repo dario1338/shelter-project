@@ -1,0 +1,4 @@
+# Machine-specific settings and secrets never go to Git
+.env
+secrets/
+*.dump

@@ -1,0 +1,11 @@
+# Production override: use the Docker network that already exists on the server.
+#
+# The network is shared with Jenkins, which created it before Compose was used, so Compose
+# must treat it as external: it never creates it, never changes it and never deletes it.
+# The volumes are new and are created by Compose on the first "up".
+# Never run "down -v" here: it would delete the database.
+#
+#   docker compose -f compose.yaml -f compose.production.yaml up -d
+networks:
+  ci:
+    external: true
