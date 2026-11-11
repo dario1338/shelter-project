@@ -1,0 +1,84 @@
+# SonarQube (Community Build) and its PostgreSQL database.
+#
+# Settings that differ per machine come from .env (see .env.example); the database password
+# is a file (see README.md), mounted at /run/secrets/sonar_db_password, never written to Git.
+name: shelter-sonarqube
+
+services:
+  sonarqube:
+    # Pinned to the version that runs in production. Do not use a moving tag such as
+    # "community": a newer SonarQube migrates the database on start and that cannot be undone.
+    image: sonarqube:26.9.0.129388-community
+    # The container name and the service name are the host name Jenkins uses
+    # (http://sonarqube:9000, see jenkins/controller/casc/20-sonarqube.yaml).
+    container_name: ${SONARQUBE_CONTAINER:-sonarqube}
+    restart: unless-stopped
+    depends_on:
+      sonarqube-db:
+        condition: service_healthy
+    ports:
+      - "${SONARQUBE_BIND:-0.0.0.0}:${SONARQUBE_PORT:-9000}:9000"
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonarqube-db:5432/${SONAR_DB_NAME:-sonarqube}
+      SONAR_JDBC_USERNAME: ${SONAR_DB_USER:-sonarqube}
+      # SONAR_JDBC_PASSWORD is set by the entrypoint below, from the secret file.
+    # The official image has no SONAR_JDBC_PASSWORD_FILE (SonarSource: not supported yet), and
+    # a password in "environment:" would be visible in "docker inspect". So the entrypoint reads
+    # the secret file and exports the password for the SonarQube process only, then starts the
+    # image's own entrypoint (the image has no CMD).
+    entrypoint:
+      - /bin/sh
+      - -c
+      - export SONAR_JDBC_PASSWORD="$$(cat /run/secrets/sonar_db_password)" && exec /opt/sonarqube/docker/entrypoint.sh
+    volumes:
+      - sonarqube-data:/opt/sonarqube/data
+      - sonarqube-extensions:/opt/sonarqube/extensions
+      - sonarqube-logs:/opt/sonarqube/logs
+    secrets:
+      - sonar_db_password
+    # SonarQube flushes its search index on shutdown; the default 10 s can cut that short.
+    stop_grace_period: 60s
+    networks:
+      - ci
+
+  sonarqube-db:
+    image: postgres:17-alpine
+    container_name: ${SONARQUBE_DB_CONTAINER:-sonarqube-db}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${SONAR_DB_USER:-sonarqube}
+      POSTGRES_DB: ${SONAR_DB_NAME:-sonarqube}
+      POSTGRES_PASSWORD_FILE: /run/secrets/sonar_db_password
+    volumes:
+      - sonarqube-db-data:/var/lib/postgresql/data
+    secrets:
+      - sonar_db_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - ci
+
+networks:
+  ci:
+    # Shared with Jenkins (jenkins/controller/compose.yaml), which reaches SonarQube over it.
+    name: ${CI_NETWORK:-shelter-ci-network}
+
+# New volumes with new names: the volumes of the SonarQube that ran before this file
+# (sonarqube_pg_*, sonarqube-db-data) are left untouched and serve as the way back.
+volumes:
+  sonarqube-data:
+    name: ${SONARQUBE_DATA_VOLUME:-shelter_sonarqube_data}
+  sonarqube-extensions:
+    name: ${SONARQUBE_EXTENSIONS_VOLUME:-shelter_sonarqube_extensions}
+  sonarqube-logs:
+    name: ${SONARQUBE_LOGS_VOLUME:-shelter_sonarqube_logs}
+  sonarqube-db-data:
+    name: ${SONARQUBE_DB_VOLUME:-shelter_sonarqube_db}
+
+secrets:
+  sonar_db_password:
+    file: ${SECRETS_DIR:-./secrets}/sonar_db_password
