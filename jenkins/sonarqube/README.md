@@ -29,7 +29,7 @@ these files, and the database from a dump (see "Restore").
 
 ## Files that are not in Git
 
-`.env` (copy `.env.example`; on the server it only needs `SECRETS_DIR`) and one secret file,
+`.env` (copy `.env.example`; on the server it only needs `SECRETS_DIR` and `SONARQUBE_BIND=127.0.0.1`) and one secret file,
 **without a trailing newline**: `sonar_db_password`. SonarQube (uid 1000) and PostgreSQL (root, in its
 entrypoint) must be able to read it: `chown 1000:1000` and `chmod 400`.
 
@@ -113,6 +113,7 @@ SonarQube was stopped, so the projects, the analysis history, the users and the 
 kept (the token was checked with `api/authentication/validate`). The previous containers
 `sonarqube-before-code` and `sonarqube-db-before-code` and the old volumes (`sonarqube_pg_*`,
 `sonarqube-db-data`) are kept stopped as the way back and are removed after a few quiet days.
+Since 2026-11-12 SonarQube is reached over HTTPS through Caddy and port 9000 is bound to `127.0.0.1`.
 
 On the production server uid 1000 is the user `opc`, so `ls -l` shows the secret file as owned by `opc`;
 the numeric owner (`ls -ln`) is 1000, which is the user inside the SonarQube container.
@@ -132,6 +133,7 @@ elsewhere is a known gap.
 
 ## Known limits
 
-- Jenkins and SonarQube are served over HTTP (port 9000 is open); HTTPS and narrowing the ports is a separate step.
+- SonarQube listens only on `127.0.0.1` (`SONARQUBE_BIND`) and is reached over HTTPS through Caddy (`jenkins/caddy`).
+  Jenkins reaches it inside the Docker network (`http://sonarqube:9000`), which is not encrypted but does not leave the host.
 - No health check on the SonarQube container (the image's tools are not guaranteed); use the status request above.
 - The dump is not tested against a clean restore on the production server before the switch; the laptop test is the proof.

@@ -159,7 +159,8 @@ run Test 1, then commit. After any change, compare with the complete resolved li
 - Plugins already in the `jenkins_home` volume are not replaced by the image's copies (the image
   only adds files that are missing). The pinned versions equal the installed ones, so nothing differs
   today; after a plugin update, the volume must be updated too (documented in Test 2 and cutover).
-- Jenkins and SonarQube are served over HTTP; HTTPS is a separate step.
+- Jenkins is reached over HTTPS through Caddy (`jenkins/caddy`) and listens only on `127.0.0.1` (`JENKINS_BIND`). It stays
+  reachable from the internet through Caddy because GitHub has to reach the webhook, so it must be kept up to date.
 - The agent has access to the host's Docker socket (needed for builds), so whoever can change a
   Jenkinsfile that runs there can control the server. That is why fork pull requests are not built.
 - Job DSL: removed jobs are not deleted; the plugin is currently "up for adoption" (maintenance risk).
