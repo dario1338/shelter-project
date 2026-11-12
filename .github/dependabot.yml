@@ -84,6 +84,20 @@ updates:
     labels:
       - "dependencies"
 
+  # Caddy, the HTTPS entrance of Jenkins and SonarQube (public-facing, so it follows security fixes).
+  # SonarQube's image is deliberately not listed: a newer version migrates its database irreversibly.
+  - package-ecosystem: "docker-compose"
+    directory: "/jenkins/caddy"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    rebase-strategy: "disabled"
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+
   # Frontend dependencies (React, Vite, Vitest, ESLint, ...)
   - package-ecosystem: "npm"
     directory: "/shelter-ui"
