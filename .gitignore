@@ -6,3 +6,6 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# SBOM files written by the CI pipeline (kept as Jenkins build artifacts)
+sbom/

@@ -5,6 +5,19 @@ def trivyScan(String image) {
     sh "trivy image --no-progress --timeout 15m --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 ${image}"
 }
 
+// Software Bill of Materials: the inventory of a finished image (operating system packages and
+// libraries) as CycloneDX JSON, kept with the build under "Build Artifacts". The file is written to the
+// workspace root, outside the component directories, so it never ends up in a Docker build context.
+// Trivy does not scan for vulnerabilities in this mode; the scans above do that.
+def writeSbom(String image, String name) {
+    def file = "sbom/${name}.cdx.json"
+    dir(env.WORKSPACE) {
+        sh "mkdir -p sbom && trivy image --no-progress --timeout 15m --format cyclonedx --output ${file} ${image}"
+        sh "grep -Eq '\"bomFormat\" *: *\"CycloneDX\"' ${file}"
+        archiveArtifacts artifacts: file, fingerprint: true
+    }
+}
+
 // Decide which components a build has to cover.
 //  - Pull request: files changed compared to the target branch. A change of the pipeline itself
 //    (this file, jenkins/) selects every component, so the change is verified on all of them.
@@ -153,6 +166,7 @@ pipeline {
                         try {
                             sh "docker build --pull --no-cache-filter runtime --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
                             trivyScan(checkTag)
+                            writeSbom(checkTag, "shelter-api-${env.GIT_COMMIT.take(7)}")
                         } finally {
                             sh "docker rmi -f ${checkTag} || true"
                         }
@@ -176,6 +190,7 @@ pipeline {
                         try {
                             sh "docker buildx build --pull --no-cache-filter runtime --platform linux/amd64 --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${imageTag} --load ."
                             trivyScan(imageTag)
+                            writeSbom(imageTag, "shelter-api-${env.GIT_COMMIT.take(7)}")
 
                             withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                                 try {
@@ -280,6 +295,7 @@ pipeline {
                         try {
                             sh "docker build --pull --no-cache-filter runtime --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
                             trivyScan(checkTag)
+                            writeSbom(checkTag, "shelter-ui-${env.GIT_COMMIT.take(7)}")
                         } finally {
                             sh "docker rmi -f ${checkTag} || true"
                         }
@@ -303,6 +319,7 @@ pipeline {
                         try {
                             sh "docker buildx build --pull --no-cache-filter runtime --platform linux/amd64 --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${imageTag} --load ."
                             trivyScan(imageTag)
+                            writeSbom(imageTag, "shelter-ui-${env.GIT_COMMIT.take(7)}")
 
                             withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                                 try {
@@ -337,6 +354,7 @@ pipeline {
                         try {
                             sh "docker build --pull --no-cache --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
                             trivyScan(checkTag)
+                            writeSbom(checkTag, "shelter-proxy-${env.GIT_COMMIT.take(7)}")
                             sh "docker run --rm -e API_UPSTREAM=example.com -e UI_UPSTREAM=example.com ${checkTag} nginx -t"
                             sh "sh ./verify.sh ${checkTag} ${env.GIT_COMMIT}"
                         } finally {
@@ -362,6 +380,7 @@ pipeline {
                         try {
                             sh "docker buildx build --pull --no-cache --platform linux/amd64 --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${imageTag} --load ."
                             trivyScan(imageTag)
+                            writeSbom(imageTag, "shelter-proxy-${env.GIT_COMMIT.take(7)}")
 
                             withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                                 try {
