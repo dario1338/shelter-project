@@ -1,0 +1,40 @@
+# Caddy: the HTTPS entrance for Jenkins and SonarQube. It obtains and renews the certificates
+# (Let's Encrypt) by itself and passes the requests on over the Docker network.
+#
+# The host names come from .env (see .env.example); they are not secret.
+name: shelter-caddy
+
+services:
+  caddy:
+    # Pinned. Dependabot proposes updates (a public-facing component should follow security fixes).
+    image: caddy:2.11.9-alpine
+    container_name: ${CADDY_CONTAINER:-caddy}
+    restart: unless-stopped
+    # 80 is needed by Let's Encrypt to check the domain and to redirect to HTTPS, 443 serves HTTPS.
+    # Docker publishes these ports itself, so the host firewall rules do not apply to them: the
+    # network security list of the cloud is the only filter (see README.md).
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      JENKINS_HOST: ${JENKINS_HOST:?set it in .env}
+      SONAR_HOST: ${SONAR_HOST:?set it in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and the account with Let's Encrypt. Losing them means asking for new certificates,
+      # which is limited by Let's Encrypt, so this is a volume and not part of the container.
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - ci
+
+networks:
+  ci:
+    # Shared with Jenkins and SonarQube, which Caddy reaches by their service names.
+    name: ${CI_NETWORK:-shelter-ci-network}
+
+volumes:
+  caddy-data:
+    name: ${CADDY_DATA_VOLUME:-shelter_caddy_data}
+  caddy-config:
+    name: ${CADDY_CONFIG_VOLUME:-shelter_caddy_config}

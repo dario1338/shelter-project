@@ -1,0 +1,19 @@
+# One site per host name; Caddy gets a certificate for each and redirects HTTP to HTTPS by itself.
+# {$NAME} is replaced by the environment variable of the same name (set in compose.yaml).
+
+(common) {
+	# HSTS: the browser uses only HTTPS for this host. One day for now; raise it (e.g. to a year)
+	# when the setup has run without problems.
+	header Strict-Transport-Security "max-age=86400"
+}
+
+{$JENKINS_HOST} {
+	import common
+	# Caddy sends X-Forwarded-For, -Proto and -Host by itself, which Jenkins needs behind a proxy.
+	reverse_proxy jenkins:8080
+}
+
+{$SONAR_HOST} {
+	import common
+	reverse_proxy sonarqube:9000
+}
