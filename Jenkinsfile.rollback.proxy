@@ -66,11 +66,13 @@ pipeline {
                 lock('shelter-production')
             }
             steps {
+                // The agent workspace is fresh after the approval wait (the release records need the repository).
+                checkout scm
                 withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
                     script {
                         def tag = env.TARGET_TAG_CLEAN
                         try {
-                            def deployId = render.deployImage(env.PROD_ID, "${env.IMAGE_REPO}:${tag}")
+                            def deployId = render.deployImage(env.PROD_ID, render.imageForTag(tag))
                             render.waitForDeploy(env.PROD_ID, deployId)
 
                             def revision = render.fetchRevision(env.PROD_URL)
@@ -85,7 +87,7 @@ pipeline {
                         } catch (e) {
                             echo "Verification after the rollback failed (${e.getMessage()})."
                             if (env.CURRENT_REVISION != 'unknown') {
-                                def previousImage = "${env.IMAGE_REPO}:${env.CURRENT_REVISION.take(7)}"
+                                def previousImage = render.imageForTag(env.CURRENT_REVISION.take(7))
                                 echo "Restoring ${previousImage}"
                                 def deployId = render.deployImage(env.PROD_ID, previousImage)
                                 render.waitForDeploy(env.PROD_ID, deployId)

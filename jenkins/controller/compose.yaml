@@ -30,6 +30,7 @@ services:
       - sonarqube_token
       - render_api_key
       - jenkins_agent_key
+      - releases_deploy_key
     networks:
       - ci
     healthcheck:
@@ -82,3 +83,5 @@ secrets:
     file: ${SECRETS_DIR:-./secrets}/render_api_key
   jenkins_agent_key:
     file: ${SECRETS_DIR:-./secrets}/jenkins_agent_key
+  releases_deploy_key:
+    file: ${SECRETS_DIR:-./secrets}/releases_deploy_key

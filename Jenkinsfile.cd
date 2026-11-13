@@ -53,6 +53,7 @@ pipeline {
                                 echo 'WARNING: IMAGE_DIGEST is empty (manual run). Delivering by tag, which is weaker than by digest.'
                                 env.IMAGE_URL = "${env.IMAGE_REPO}:${commit.take(7)}"
                             }
+                            env.RELEASE_DIGEST = digest
                             echo "Delivering image ${env.IMAGE_URL}"
                         }
                     }
@@ -153,6 +154,9 @@ pipeline {
                                     render.verifyServedBy(env.ACTIVE_HOST)
                                     error "Release rolled back to ${env.ACTIVE_HOST}: ${e.getMessage()}"
                                 }
+
+                                // Reached only when the release succeeded (the catch block always ends with error)
+                                render.recordRelease(env.COMMIT_FULL, env.RELEASE_DIGEST)
                             }
                         }
                     }
