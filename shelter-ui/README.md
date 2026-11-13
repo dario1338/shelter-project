@@ -24,3 +24,5 @@ For local development add `http://localhost:5173` to the API's `ALLOWED_ORIGINS`
 
 The `Dockerfile` builds the app and serves it with nginx on port 10000 (`/healthz` for health
 checks). In production the browser reaches it through `shelter-proxy`.
+
+
