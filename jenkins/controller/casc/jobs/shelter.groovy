@@ -35,6 +35,7 @@ deliveries.each { d ->
         configure noConcurrentBuilds
         parameters {
             stringParam('GIT_COMMIT_FULL', '', 'Full commit hash (40 characters) of the image to deliver')
+            stringParam('IMAGE_DIGEST', '', 'Digest (sha256:...) of the image built by CI, set by CI. If empty (manual run), the image is taken by tag, which is weaker')
             booleanParam('TEST_ROLLBACK', false, 'TEST ONLY: fail the verification right after the traffic switch, to demonstrate the automatic rollback')
         }
         definition {

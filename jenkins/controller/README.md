@@ -79,7 +79,7 @@ docker compose logs -f jenkins        # wait for "Jenkins is fully up and runnin
 ```
 
 Check at http://localhost:18080 (user `admin`, password from the file): login works; 7 jobs exist;
-`shelter-cd` shows the parameters *GIT_COMMIT_FULL* and *TEST_ROLLBACK* without having been run;
+`shelter-cd` shows the parameters *GIT_COMMIT_FULL*, *IMAGE_DIGEST* and *TEST_ROLLBACK* without having been run;
 Credentials lists the 5 ids; the node `docker-agent-1` exists; *Configuration as Code > Reload
 existing configuration* succeeds twice (idempotent). Then:
 

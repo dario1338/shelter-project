@@ -47,7 +47,12 @@ Settings are in the web page (Add New Monitor). Interval 60 seconds. For the fir
 | SonarQube | HTTP(s) - Keyword | `http://sonarqube:9000/api/system/status` | keyword `"status":"UP"` |
 | Jenkins (public) | HTTP(s) | `https://<jenkins host>/login` | status 200, certificate expiry on |
 | SonarQube (public) | HTTP(s) - Keyword | `https://<sonar host>/api/system/status` | keyword `"status":"UP"`, certificate expiry on |
-| Application, production (heartbeat) | HTTP(s) | the real address of the API `/api/health` | status 200, **interval 6 hours, timeout 120 s** |
+| Application, production (heartbeat) | HTTP(s) | `https://<proxy host>/proxy-health` | status 200, **interval 6 hours or longer, timeout 120 s, retry interval 300 s** |
+
+The application is checked through `/proxy-health`, which the proxy answers by itself, and **not** through `/api/...`:
+the platform does not wake a sleeping free instance for a request that comes from another service (the proxy), so a
+check that goes through the proxy to a sleeping API answers 503 or 429 and is not a failure of ours. The API is verified
+by the smoke tests of the delivery pipeline after every release.
 
 The application is deliberately **not** checked every minute: free Render services go to sleep after 15 minutes
 without traffic, so a sleeping service is not a failure, and a check every minute would keep it awake and use up the

@@ -5,6 +5,20 @@ def trivyScan(String image) {
     sh "trivy image --no-progress --timeout 15m --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 ${image}"
 }
 
+// Pushes an image and returns its registry digest (sha256:...). The digest is the identity of the
+// exact content that was scanned and pushed; delivery uses it instead of the movable tag.
+def pushImage(String image, String name) {
+    def log = "push-${name}.log"
+    sh "docker push ${image} > ${log} 2>&1 || { cat ${log}; exit 1; }; cat ${log}"
+    def digest = sh(script: "grep -Eo 'digest: sha256:[0-9a-f]{64}' ${log} | tail -1 | cut -d' ' -f2", returnStdout: true).trim()
+    sh "rm -f ${log}"
+    if (!(digest ==~ /^sha256:[0-9a-f]{64}$/)) {
+        error "Could not read the digest of ${image} from the push output"
+    }
+    echo "Pushed ${image} with digest ${digest}"
+    return digest
+}
+
 // Software Bill of Materials: the inventory of a finished image (operating system packages and
 // libraries) as CycloneDX JSON, kept with the build under "Build Artifacts". The file is written to the
 // workspace root, outside the component directories, so it never ends up in a Docker build context.
@@ -195,7 +209,7 @@ pipeline {
                             withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                                 try {
                                     sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-                                    sh "docker push ${imageTag}"
+                                    env.API_IMAGE_DIGEST = pushImage(imageTag, "api")
                                 } finally {
                                     sh 'docker logout || true'
                                 }
@@ -324,7 +338,7 @@ pipeline {
                             withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                                 try {
                                     sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-                                    sh "docker push ${imageTag}"
+                                    env.UI_IMAGE_DIGEST = pushImage(imageTag, "ui")
                                 } finally {
                                     sh 'docker logout || true'
                                 }
@@ -385,7 +399,7 @@ pipeline {
                             withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                                 try {
                                     sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-                                    sh "docker push ${imageTag}"
+                                    env.PROXY_IMAGE_DIGEST = pushImage(imageTag, "proxy")
                                 } finally {
                                     sh 'docker logout || true'
                                 }
@@ -411,7 +425,8 @@ pipeline {
             }
             steps {
                 build job: '/shelter-cd',
-                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT)],
+                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT),
+                                   string(name: 'IMAGE_DIGEST', value: env.API_IMAGE_DIGEST)],
                       wait: false
             }
         }
@@ -425,7 +440,8 @@ pipeline {
             }
             steps {
                 build job: '/shelter-cd-ui',
-                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT)],
+                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT),
+                                   string(name: 'IMAGE_DIGEST', value: env.UI_IMAGE_DIGEST)],
                       wait: false
             }
         }
@@ -439,7 +455,8 @@ pipeline {
             }
             steps {
                 build job: '/shelter-cd-proxy',
-                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT)],
+                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT),
+                                   string(name: 'IMAGE_DIGEST', value: env.PROXY_IMAGE_DIGEST)],
                       wait: false
             }
         }
