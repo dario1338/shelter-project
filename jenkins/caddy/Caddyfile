@@ -17,3 +17,8 @@
 	import common
 	reverse_proxy sonarqube:9000
 }
+
+{$STATUS_HOST} {
+	import common
+	reverse_proxy uptime-kuma:3001
+}
