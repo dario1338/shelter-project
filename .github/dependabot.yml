@@ -98,6 +98,23 @@ updates:
     labels:
       - "dependencies"
 
+  # Uptime Kuma, the monitoring page. A major version changes its data, so it stays a manual decision.
+  - package-ecosystem: "docker-compose"
+    directory: "/jenkins/uptimekuma"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    rebase-strategy: "disabled"
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+    ignore:
+      - dependency-name: "louislam/uptime-kuma"
+        update-types:
+          - "version-update:semver-major"
+
   # Frontend dependencies (React, Vite, Vitest, ESLint, ...)
   - package-ecosystem: "npm"
     directory: "/shelter-ui"

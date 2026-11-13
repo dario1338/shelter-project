@@ -1,0 +1,10 @@
+# Production override: use the Docker network that already exists on the server.
+#
+# The network is shared with Jenkins, SonarQube and Caddy, so Compose must treat it as external: it
+# never creates it, never changes it and never deletes it. The volume is new and is created by
+# Compose on the first "up". Never run "down -v" here: it would delete the monitors and the history.
+#
+#   docker compose -f compose.yaml -f compose.production.yaml up -d
+networks:
+  ci:
+    external: true
