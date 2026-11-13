@@ -105,7 +105,7 @@ pipeline {
 
                         def tag = env.TARGET_TAG_CLEAN
                         if (tag) {
-                            def deployId = render.deployImage(env.IDLE_ID, "${env.IMAGE_REPO}:${tag}")
+                            def deployId = render.deployImage(env.IDLE_ID, render.imageForTag(tag))
                             render.waitForDeploy(env.IDLE_ID, deployId)
                         }
 

@@ -96,6 +96,81 @@ def deployImage(String serviceId, String imageUrl) {
     return startDeploy(serviceId, "{\"imageUrl\": \"${imageUrl}\"}")
 }
 
+// ---------------------------------------------------------------- Release records
+// Every successful production release is recorded (commit and image digest) in the file
+// releases/<component>.json on the "releases" branch of the repository. A rollback reads the digest from
+// there, so it deploys the exact image that ran before instead of trusting a tag that can be moved.
+// The branch is written with a deploy key (credential releases-deploy-key) and read anonymously (public
+// repository). These functions need the repository checked out (jenkins/release-record.js) and node.
+
+def componentName() {
+    return env.IMAGE_REPO.substring(env.IMAGE_REPO.lastIndexOf('/') + 1)
+}
+
+// Image reference for a rollback target given by a 7-character tag: by digest when that release was
+// recorded, otherwise by tag (weaker; a WARNING says so).
+def imageForTag(String tag) {
+    def name = componentName()
+    def dir = 'releases-read'
+    def digest = ''
+    try {
+        sh "rm -rf ${dir} && git clone --quiet --depth 1 --branch releases https://github.com/dario1338/shelter-project.git ${dir}"
+        digest = sh(returnStdout: true, script: "node jenkins/release-record.js find ${dir}/releases/${name}.json ${tag}").trim()
+    } catch (e) {
+        echo "WARNING: the release records could not be read (${e.getMessage()})."
+    } finally {
+        sh "rm -rf ${dir}"
+    }
+    if (digest) {
+        echo "Release ${tag} is recorded, deploying it by digest ${digest}"
+        return "${env.IMAGE_REPO}@${digest}"
+    }
+    echo "WARNING: no record for ${tag}, so the image is taken by tag, which is weaker than by digest."
+    return "${env.IMAGE_REPO}:${tag}"
+}
+
+// Appends the release to the records. The release is already live when this runs, so a failure here
+// never rolls anything back: it marks the build UNSTABLE, and the record stays archived with the build
+// so that it can be added by hand.
+def recordRelease(String commit, String digest) {
+    def name = componentName()
+    if (!digest) {
+        echo 'WARNING: this release was delivered by tag (no digest), so it is not recorded.'
+        return
+    }
+    try {
+        def stamp = sh(returnStdout: true, script: 'date -u +%Y-%m-%dT%H:%M:%SZ').trim()
+        def entryFile = "release-record-${name}.json"
+        withEnv(["REC_COMMIT=${commit}", "REC_DIGEST=${digest}", "REC_TIME=${stamp}", "REC_URL=${env.BUILD_URL}", "REC_FILE=${entryFile}", "REC_NAME=${name}"]) {
+            sh 'node jenkins/release-record.js entry "$REC_COMMIT" "$REC_DIGEST" "$REC_TIME" "$REC_URL" > "$REC_FILE"'
+            archiveArtifacts artifacts: entryFile
+            withCredentials([sshUserPrivateKey(credentialsId: 'releases-deploy-key', keyFileVariable: 'DEPLOY_KEY')]) {
+                sh '''
+                    export GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$WORKSPACE/jenkins/github_known_hosts"
+                    result=no
+                    for attempt in 1 2 3; do
+                        rm -rf releases-write
+                        git clone --quiet --depth 1 --branch releases git@github.com:dario1338/shelter-project.git releases-write
+                        node jenkins/release-record.js add "releases-write/releases/$REC_NAME.json" "$REC_FILE"
+                        if git -C releases-write diff --quiet; then result=unchanged; break; fi
+                        git -C releases-write -c user.name=jenkins -c user.email=jenkins@shelter.invalid \
+                            commit --quiet -am "Record $REC_NAME release $(echo "$REC_COMMIT" | cut -c1-7)"
+                        if git -C releases-write push --quiet origin releases; then result=yes; break; fi
+                        echo "Push was rejected (attempt $attempt), trying again"
+                        sleep 3
+                    done
+                    rm -rf releases-write
+                    [ "$result" != no ]
+                '''
+            }
+        }
+        echo "Recorded ${name} release ${commit.take(7)} (${digest})"
+    } catch (e) {
+        echo "WARNING: the release is live but could not be recorded: ${e.getMessage()}"
+        unstable('The release is live, but it could not be recorded on the releases branch')
+    }
+}
+
 def waitForDeploy(String serviceId, String deployId) {
     timeout(time: 15, unit: 'MINUTES') {
         waitUntil(initialRecurrencePeriod: 10000) {

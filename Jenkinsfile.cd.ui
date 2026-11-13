@@ -58,6 +58,7 @@ pipeline {
                                 echo 'WARNING: IMAGE_DIGEST is empty (manual run). Delivering by tag, which is weaker than by digest.'
                                 env.IMAGE_URL = "${env.IMAGE_REPO}:${commit.take(7)}"
                             }
+                            env.RELEASE_DIGEST = digest
                             echo "Delivering image ${env.IMAGE_URL}"
                         }
                     }
@@ -111,6 +112,8 @@ pipeline {
                 lock('shelter-production')
             }
             steps {
+                // The agent workspace is fresh after the approval wait (the release records need the repository).
+                checkout scm
                 withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
                     script {
                         // What production looks like before this release, to be able to restore it.
@@ -142,8 +145,7 @@ pipeline {
                                 render.setUpstream(previousUpstream)
                             }
                             if (previousRevision) {
-                                def previousImage = "${env.IMAGE_REPO}:${previousRevision.take(7)}"
-                                echo 'WARNING: rolling back by tag (no digest recorded for the previous release), which is weaker than by digest.'
+                                def previousImage = render.imageForTag(previousRevision.take(7))
                                 def deployId = render.deployImage(env.PROD_ID, previousImage)
                                 render.waitForDeploy(env.PROD_ID, deployId)
                                 render.verifyRevision(env.PROD_URL, previousRevision)
@@ -153,6 +155,9 @@ pipeline {
                             }
                             error "Release failed and was rolled back: ${e.getMessage()}"
                         }
+
+                        // Reached only when the release succeeded (the catch block always ends with error)
+                        render.recordRelease(env.COMMIT_FULL, env.RELEASE_DIGEST)
                     }
                 }
             }
