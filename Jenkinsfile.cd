@@ -8,6 +8,8 @@ pipeline {
     parameters {
         string(name: 'GIT_COMMIT_FULL', defaultValue: '',
                description: 'Full commit hash (40 characters) of the image to deliver')
+        string(name: 'IMAGE_DIGEST', defaultValue: '',
+               description: 'Digest (sha256:...) of the image built by CI. Set by CI. If empty (manual run), the image is taken by tag, which is weaker')
         booleanParam(name: 'TEST_ROLLBACK', defaultValue: false,
                description: 'TEST ONLY: fail the verification right after the traffic switch, to demonstrate the automatic rollback')
     }
@@ -39,7 +41,18 @@ pipeline {
                                 error "GIT_COMMIT_FULL must be a full 40-character hash, got: '${commit}'"
                             }
                             env.COMMIT_FULL = commit
-                            env.IMAGE_URL = "${env.IMAGE_REPO}:${commit.take(7)}"
+                            // The digest identifies the exact content CI built and scanned; a tag can be
+                            // moved to other content. Deliver by digest whenever CI provides one.
+                            def digest = params.IMAGE_DIGEST.trim()
+                            if (digest) {
+                                if (!(digest ==~ /^sha256:[0-9a-f]{64}$/)) {
+                                    error "IMAGE_DIGEST must look like sha256:<64 hex characters>, got: '${digest}'"
+                                }
+                                env.IMAGE_URL = "${env.IMAGE_REPO}@${digest}"
+                            } else {
+                                echo 'WARNING: IMAGE_DIGEST is empty (manual run). Delivering by tag, which is weaker than by digest.'
+                                env.IMAGE_URL = "${env.IMAGE_REPO}:${commit.take(7)}"
+                            }
                             echo "Delivering image ${env.IMAGE_URL}"
                         }
                     }
