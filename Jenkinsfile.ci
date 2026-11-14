@@ -77,6 +77,11 @@ def detectChangedComponents() {
 pipeline {
     agent { label 'docker' }
 
+    options {
+        // Keep the history of every branch and pull request bounded; the SBOMs are small but there are three per build.
+        buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '10'))
+    }
+
     stages {
         stage('Checkout') {
             steps {

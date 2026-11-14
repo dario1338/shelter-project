@@ -1,24 +1,42 @@
-# Release records
+# Release records and rollback
 
-Every successful production release is recorded, so that a rollback can deploy the exact image that ran
-before. An image tag can be moved to other content; a digest cannot.
+Every successful production release, and every successful rollback, archives a small record with its build:
+the commit and the image digest. A rollback names an earlier successful delivery build, takes the digest from
+that build's record and deploys it, so it never relies on an image tag that can be moved to other content.
 
 | What | Where |
 |---|---|
-| Records | branch `releases`, one file per component: `releases/shelter-api.json`, `shelter-ui.json`, `shelter-proxy.json` |
-| Entry | `commit` (40 characters), `digest` (`sha256:...`), `deployedAt` (UTC), `buildUrl`, `previousDigest` |
-| Written by | the delivery pipelines (`Jenkinsfile.cd*`), after the production release and its verification, with the deploy key (credential `releases-deploy-key`) |
-| Read by | the rollback pipelines and the automatic rollback of the UI and proxy delivery (`render.imageForTag`), anonymously (public repository) |
-| Code | `jenkins/render.groovy` (`recordRelease`, `imageForTag`), `jenkins/release-record.js` |
+| Record | `release-record-<component>.json`, archived by the build (`archiveArtifacts`, with fingerprint) |
+| Fields | `commit` (40 characters), `digest` (`sha256:...`), `deployedAt` (UTC), `action` (`release` or `rollback`), `buildUrl` |
+| Written by | the delivery jobs `shelter-cd`, `shelter-cd-ui`, `shelter-cd-proxy` after the production release and its verification; the rollback jobs after a successful rollback |
+| Read by | the rollback jobs (`TARGET_BUILD` = number of a delivery build, copied with `copyArtifacts`) and the automatic restore after a failed release or rollback (last successful build of the delivery or rollback job) |
+| Code | `jenkins/render.groovy` (`recordRelease`, `releaseFromBuild`, `imageForRevision`), `jenkins/release-record.js` |
 
-Rules and limits:
+The delivery builds are named `#<number> <7-character commit>`, so the build list shows which version each one
+delivered, and a rollback is started with the number of the build to go back to
+(`shelter-rollback-proxy`, `TARGET_BUILD` = `7`).
 
-- The branch is protected against deletion and force push (ruleset `releases-protection`). The deploy key
-  can push to any branch that is not protected, but not to `main` (its ruleset has no bypass).
-- If the record cannot be written, the release stays live, the build becomes UNSTABLE and the record is kept
-  as a build artifact (`release-record-<component>.json`), so it can be added by hand.
+## Rules and limits
+
+- Only a build that completed a successful production release has a record, so only such a build can be chosen.
+  A build that failed, was rolled back automatically or was never approved has none.
+- If the record cannot be archived the release stays live and the build becomes UNSTABLE.
 - A release delivered by tag (a manual run without `IMAGE_DIGEST`) is not recorded.
-- A rollback to a release without a record falls back to the tag and says so in the log (WARNING).
+- The records live in the Jenkins history, so they are exactly as durable as the Jenkins home volume
+  (`jenkins_home`). Until that volume is backed up outside the server, losing it loses the records.
+- Build history is kept by `buildDiscarder`: delivery jobs 100 builds (records included), rollback jobs 30,
+  CI 30 builds per branch (artifacts of the last 10). A release older than that cannot be chosen any more.
+- The automatic restore after a failed release finds the previous digest in the last successful delivery or
+  rollback build. If production is not what that build recorded (for example it was changed by hand), the
+  image is taken by tag and the log says WARNING.
 - A digest only works while the image exists on Docker Hub; do not delete images of releases you may restore.
-- The SSH host key of GitHub is pinned in `jenkins/github_known_hosts` (fingerprint
-  `SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU`, as published by GitHub).
+- Permission to copy artifacts: the delivery and rollback jobs allow each other with `copyArtifactPermission`
+  in their Jenkinsfiles. Job DSL rewrites the job configuration when the controller starts, so a job may lose
+  that property until it has run once again. If a rollback fails with a message about the project or its
+  permissions, run the delivery job once (or check the permission in the job's configuration).
+
+## Replaced
+
+An earlier version kept the records as JSON files on the git branch `releases`, written with a deploy key.
+That branch, the deploy key (`releases_deploy_key`, credential `releases-deploy-key`) and
+`jenkins/github_known_hosts` are no longer used and are removed in a separate change once this is proven.

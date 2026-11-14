@@ -53,7 +53,7 @@ deliveries.each { d ->
     }
 }
 
-// Rollback pipelines: started by hand, with the image tag to go back to.
+// Rollback pipelines: started by hand, with the number of an earlier successful delivery build to go back to.
 def rollbacks = [
     [name: 'shelter-rollback',       script: 'Jenkinsfile.rollback',       what: 'API'],
     [name: 'shelter-rollback-ui',    script: 'Jenkinsfile.rollback.ui',    what: 'UI'],
@@ -61,10 +61,10 @@ def rollbacks = [
 ]
 rollbacks.each { r ->
     pipelineJob(r.name) {
-        description("Manual rollback of the ${r.what} to an earlier image tag. Defined in ${r.script}.")
+        description("Manual rollback of the ${r.what} to the release of an earlier delivery build. Defined in ${r.script}.")
         configure noConcurrentBuilds
         parameters {
-            stringParam('TARGET_TAG', '', 'Image tag (7-character commit hash) to roll back to')
+            stringParam('TARGET_BUILD', '', 'Number of an earlier successful delivery build (shelter-cd, shelter-cd-ui, shelter-cd-proxy) to roll back to')
         }
         definition {
             cpsScm {

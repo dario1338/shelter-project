@@ -9,13 +9,16 @@ pipeline {
     agent none
 
     parameters {
-        string(name: 'TARGET_TAG', defaultValue: '',
-               description: 'REQUIRED: 7-character image tag of shelter-proxy on Docker Hub to roll production back to')
+        string(name: 'TARGET_BUILD', defaultValue: '',
+               description: 'REQUIRED: number of an earlier successful delivery build of the proxy (job shelter-cd-proxy) to roll production back to')
     }
 
     options {
         disableConcurrentBuilds()
         timeout(time: 60, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+        // A failed release or rollback restores what ran before; the record of the last successful rollback may say which digest that was.
+        copyArtifactPermission('shelter-cd*,shelter-rollback*')
     }
 
     stages {
@@ -28,18 +31,23 @@ pipeline {
                     render.init()
                     render.useComponent('proxy')
 
-                    def tag = (params.TARGET_TAG ?: '').trim()
-                    if (!(tag ==~ /^[0-9a-f]{7}$/)) {
-                        error "TARGET_TAG must be a 7-character lowercase hex tag, got: '${tag}'"
+                    def buildNumber = (params.TARGET_BUILD ?: '').trim()
+                    if (!(buildNumber ==~ /^[0-9]+$/)) {
+                        error "TARGET_BUILD must be the number of an earlier delivery build (digits only), got: '${buildNumber}'"
                     }
-                    env.TARGET_TAG_CLEAN = tag
+                    // The record of that build: which commit and which image digest it released to production.
+                    def target = render.releaseFromBuild(buildNumber)
+                    env.TARGET_BUILD_CLEAN = buildNumber
+                    env.TARGET_COMMIT = target.commit
+                    env.TARGET_DIGEST = target.digest
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} to ${target.commit.take(7)}"
 
                     // Also wakes up the service if it sleeps. '' means the running image predates /proxy-version.
                     render.wakeUpstreams(env.PROD_ID)
                     env.CURRENT_REVISION = render.fetchRevision(env.PROD_URL) ?: 'unknown'
                     echo "Production proxy revision: ${env.CURRENT_REVISION}"
-                    if (env.CURRENT_REVISION.startsWith(tag)) {
-                        error "Production already runs ${tag}, nothing to roll back"
+                    if (env.CURRENT_REVISION == env.TARGET_COMMIT) {
+                        error "Production already runs ${env.TARGET_COMMIT.take(7)}, nothing to roll back"
                     }
                 }
             }
@@ -51,7 +59,7 @@ pipeline {
                 script {
                     def shown = env.CURRENT_REVISION.length() == 40 ? env.CURRENT_REVISION.take(7) : env.CURRENT_REVISION
                     timeout(time: 30, unit: 'MINUTES') {
-                        input message: "Roll back the production proxy from ${shown} to ${env.TARGET_TAG_CLEAN}?",
+                        input message: "Roll back the production proxy from ${shown} to ${env.TARGET_COMMIT.take(7)} (delivery build #${env.TARGET_BUILD_CLEAN}, ${env.TARGET_DIGEST})?",
                               ok: 'Roll back'
                     }
                 }
@@ -70,24 +78,25 @@ pipeline {
                 checkout scm
                 withCredentials([string(credentialsId: 'render-api-key', variable: 'RENDER_KEY')]) {
                     script {
-                        def tag = env.TARGET_TAG_CLEAN
+                        def image = "${env.IMAGE_REPO}@${env.TARGET_DIGEST}"
+                        def revision = null
                         try {
-                            def deployId = render.deployImage(env.PROD_ID, render.imageForTag(tag))
+                            def deployId = render.deployImage(env.PROD_ID, image)
                             render.waitForDeploy(env.PROD_ID, deployId)
 
-                            def revision = render.fetchRevision(env.PROD_URL)
-                            if (revision && !revision.startsWith(tag)) {
-                                error "The production proxy reports revision ${revision}, expected an image tagged ${tag}"
+                            revision = render.fetchRevision(env.PROD_URL)
+                            if (revision && revision != env.TARGET_COMMIT) {
+                                error "The production proxy reports revision ${revision}, expected ${env.TARGET_COMMIT}"
                             }
                             if (!revision) {
                                 echo 'WARNING: the target version does not report a revision (it predates /proxy-version). Only the smoke tests are verified.'
                             }
                             render.smokeProxy(env.PROD_URL, env.PROD_ID)
-                            echo "Production proxy now runs ${revision ?: tag}"
+                            echo "Production proxy now runs ${revision ?: env.TARGET_COMMIT}"
                         } catch (e) {
                             echo "Verification after the rollback failed (${e.getMessage()})."
                             if (env.CURRENT_REVISION != 'unknown') {
-                                def previousImage = render.imageForTag(env.CURRENT_REVISION.take(7))
+                                def previousImage = render.imageForRevision(env.CURRENT_REVISION)
                                 echo "Restoring ${previousImage}"
                                 def deployId = render.deployImage(env.PROD_ID, previousImage)
                                 render.waitForDeploy(env.PROD_ID, deployId)
@@ -97,6 +106,9 @@ pipeline {
                             }
                             error "Rollback failed: ${e.getMessage()}"
                         }
+
+                        // Reached only when the rollback succeeded (the catch block always ends with error)
+                        render.recordRelease(env.TARGET_COMMIT, env.TARGET_DIGEST, 'rollback')
                     }
                 }
             }

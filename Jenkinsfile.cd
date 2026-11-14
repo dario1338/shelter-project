@@ -17,6 +17,11 @@ pipeline {
     options {
         disableConcurrentBuilds()
         timeout(time: 90, unit: 'MINUTES')
+        // The builds are the release history (each keeps its release record), so keep many of them.
+        buildDiscarder(logRotator(numToKeepStr: '100', artifactNumToKeepStr: '100'))
+        // A failed release restores what ran before; the record of the last successful build tells which digest that was.
+        // The rollback jobs read the records of this job.
+        copyArtifactPermission('shelter-cd*,shelter-rollback*')
     }
 
     stages {
@@ -54,6 +59,8 @@ pipeline {
                                 env.IMAGE_URL = "${env.IMAGE_REPO}:${commit.take(7)}"
                             }
                             env.RELEASE_DIGEST = digest
+                            // The build list then shows which version each build delivers (rollbacks pick a build from it)
+                            currentBuild.displayName = "#${env.BUILD_NUMBER} ${commit.take(7)}"
                             echo "Delivering image ${env.IMAGE_URL}"
                         }
                     }
