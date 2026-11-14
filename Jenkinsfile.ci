@@ -19,6 +19,22 @@ def pushImage(String image, String name) {
     return digest
 }
 
+// Signs the pushed image with the CI key. The signature is bound to the digest (never to a tag) and stored in
+// the registry next to the image. It must run inside the Docker Hub login, because cosign pushes the signature
+// with the same credentials. Key and password come from Jenkins credentials as environment variables, so they
+// never appear on a command line or in the log. The signing config lists no transparency log: the public one
+// would publish the image name and digest, and signing with our own key does not need it (jenkins/SIGNING.md).
+def signImage(String image, String digest) {
+    def repository = image.substring(0, image.lastIndexOf(':'))
+    withCredentials([string(credentialsId: 'cosign-key', variable: 'COSIGN_KEY'),
+                     string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')]) {
+        withEnv(["IMAGE_TO_SIGN=${repository}@${digest}"]) {
+            sh 'cosign sign --yes --key env://COSIGN_KEY --signing-config="${WORKSPACE}/jenkins/cosign-signing-config.json" "${IMAGE_TO_SIGN}"'
+        }
+    }
+    echo "Signed ${repository}@${digest}"
+}
+
 // Software Bill of Materials: the inventory of a finished image (operating system packages and
 // libraries) as CycloneDX JSON, kept with the build under "Build Artifacts". The file is written to the
 // workspace root, outside the component directories, so it never ends up in a Docker build context.
@@ -215,6 +231,7 @@ pipeline {
                                 try {
                                     sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
                                     env.API_IMAGE_DIGEST = pushImage(imageTag, "api")
+                                    signImage(imageTag, env.API_IMAGE_DIGEST)
                                 } finally {
                                     sh 'docker logout || true'
                                 }
@@ -344,6 +361,7 @@ pipeline {
                                 try {
                                     sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
                                     env.UI_IMAGE_DIGEST = pushImage(imageTag, "ui")
+                                    signImage(imageTag, env.UI_IMAGE_DIGEST)
                                 } finally {
                                     sh 'docker logout || true'
                                 }
@@ -405,6 +423,7 @@ pipeline {
                                 try {
                                     sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
                                     env.PROXY_IMAGE_DIGEST = pushImage(imageTag, "proxy")
+                                    signImage(imageTag, env.PROXY_IMAGE_DIGEST)
                                 } finally {
                                     sh 'docker logout || true'
                                 }

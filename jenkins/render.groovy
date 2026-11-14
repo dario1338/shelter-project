@@ -443,4 +443,19 @@ def smokeProxy(String baseUrl, String proxyServiceId) {
     echo "Proxy smoke tests passed for ${baseUrl}"
 }
 
+// Verifies that an image was signed by our CI key. The public key is in the repository (jenkins/cosign.pub),
+// so the check needs nothing from Jenkins' secrets. Only digest references are accepted: a tag can be moved,
+// and the signature is bound to the digest. The signatures are not recorded in a transparency log (see
+// jenkins/SIGNING.md), hence --insecure-ignore-tlog. The reference goes through the environment, never
+// into the shell script.
+def verifySignature(String image) {
+    if (!(image ==~ /^[a-z0-9.\/_-]+@sha256:[0-9a-f]{64}$/)) {
+        error "Cannot verify '${image}': a reference with a digest (name@sha256:...) is required"
+    }
+    withEnv(["IMAGE_TO_VERIFY=${image}"]) {
+        sh 'cosign verify --key jenkins/cosign.pub --insecure-ignore-tlog=true "${IMAGE_TO_VERIFY}" > /dev/null'
+    }
+    echo "Signature verified: ${image}"
+}
+
 return this

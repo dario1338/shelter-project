@@ -29,6 +29,8 @@ services:
       - dockerhub_token
       - sonarqube_token
       - render_api_key
+      - cosign_key
+      - cosign_password
       - jenkins_agent_key
     networks:
       - ci
@@ -80,5 +82,9 @@ secrets:
     file: ${SECRETS_DIR:-./secrets}/sonarqube_token
   render_api_key:
     file: ${SECRETS_DIR:-./secrets}/render_api_key
+  cosign_key:
+    file: ${SECRETS_DIR:-./secrets}/cosign_key
+  cosign_password:
+    file: ${SECRETS_DIR:-./secrets}/cosign_password
   jenkins_agent_key:
     file: ${SECRETS_DIR:-./secrets}/jenkins_agent_key

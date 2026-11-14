@@ -47,6 +47,8 @@ pipeline {
                                 def target = render.releaseFromBuild(buildNumber)
                                 env.TARGET_COMMIT = target.commit
                                 env.TARGET_DIGEST = target.digest
+                                // Roll back only to an image our CI signed (releases from before signing was introduced cannot be targeted)
+                                render.verifySignature("${env.IMAGE_REPO}@${env.TARGET_DIGEST}")
                                 currentBuild.displayName = "#${env.BUILD_NUMBER} to ${target.commit.take(7)}"
                             }
 
