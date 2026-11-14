@@ -59,6 +59,12 @@ pipeline {
                                 env.IMAGE_URL = "${env.IMAGE_REPO}:${commit.take(7)}"
                             }
                             env.RELEASE_DIGEST = digest
+                            // Deliver only what CI signed: a digest alone says what the content is, the signature says that our CI pushed it.
+                            if (digest) {
+                                render.verifySignature(env.IMAGE_URL)
+                            } else {
+                                echo 'WARNING: the signature was not verified because there is no digest (manual run).'
+                            }
                             // The build list then shows which version each build delivers (rollbacks pick a build from it)
                             currentBuild.displayName = "#${env.BUILD_NUMBER} ${commit.take(7)}"
                             echo "Delivering image ${env.IMAGE_URL}"
