@@ -48,7 +48,6 @@ set with `SECRETS_DIR`). One file per secret, **no trailing newline**:
 | `sonarqube_token` | SonarQube token (credential `sonarqube-token`) |
 | `render_api_key` | Render API key (credential `render-api-key`) |
 | `jenkins_agent_key` | private SSH key of the controller for the agent (credential `jenkins-agent-key`) |
-| `releases_deploy_key` | private deploy key (write access) for the `releases` branch (credential `releases-deploy-key`). Unlike the others this file keeps the final newline that `ssh-keygen` writes, because OpenSSH rejects a key without it |
 
 On Linux the files must be readable by the user inside the container (uid 1000):
 `sudo chown 1000:1000 secrets/* && sudo chmod 400 secrets/*`.
@@ -62,7 +61,7 @@ agent image is arm64, the laptop is x86_64), so the node `docker-agent-1` shows 
 cd jenkins\controller
 New-Item -ItemType Directory secrets | Out-Null
 'test-password-123' | Set-Content -NoNewline -Encoding ascii secrets\jenkins_admin_password
-foreach ($n in 'github_token','dockerhub_token','sonarqube_token','render_api_key','jenkins_agent_key','releases_deploy_key') {
+foreach ($n in 'github_token','dockerhub_token','sonarqube_token','render_api_key','jenkins_agent_key') {
   'fake-value' | Set-Content -NoNewline -Encoding ascii "secrets\$n" }
 Copy-Item .env.example .env   # then edit .env: see below
 ```
@@ -81,7 +80,7 @@ docker compose logs -f jenkins        # wait for "Jenkins is fully up and runnin
 
 Check at http://localhost:18080 (user `admin`, password from the file): login works; 7 jobs exist;
 `shelter-cd` shows the parameters *GIT_COMMIT_FULL*, *IMAGE_DIGEST* and *TEST_ROLLBACK* without having been run;
-Credentials lists the 6 ids; the node `docker-agent-1` exists; *Configuration as Code > Reload
+Credentials lists the 5 ids; the node `docker-agent-1` exists; *Configuration as Code > Reload
 existing configuration* succeeds twice (idempotent). Then:
 
 ```powershell
