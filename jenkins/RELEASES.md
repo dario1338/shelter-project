@@ -35,8 +35,8 @@ delivered, and a rollback is started with the number of the build to go back to
   that property until it has run once again. If a rollback fails with a message about the project or its
   permissions, run the delivery job once (or check the permission in the job's configuration).
 
-## Replaced
+## History
 
-An earlier version kept the records as JSON files on the git branch `releases`, written with a deploy key.
-That branch, the deploy key (`releases_deploy_key`, credential `releases-deploy-key`) and
-`jenkins/github_known_hosts` are no longer used and are removed in a separate change once this is proven.
+The records were first kept as JSON files on a git branch (`releases`), written with a deploy key. That was
+replaced by the records in the Jenkins builds, which is the usual Jenkins practice and needs no extra secret;
+the branch, its deploy key and its host key file were removed on 2026-11-14.
