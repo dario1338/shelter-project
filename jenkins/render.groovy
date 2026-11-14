@@ -97,77 +97,100 @@ def deployImage(String serviceId, String imageUrl) {
 }
 
 // ---------------------------------------------------------------- Release records
-// Every successful production release is recorded (commit and image digest) in the file
-// releases/<component>.json on the "releases" branch of the repository. A rollback reads the digest from
-// there, so it deploys the exact image that ran before instead of trusting a tag that can be moved.
-// The branch is written with a deploy key (credential releases-deploy-key) and read anonymously (public
-// repository). These functions need the repository checked out (jenkins/release-record.js) and node.
+// Every successful production release (and every successful rollback) archives a small record with its
+// build: commit and image digest (release-record-<component>.json, see jenkins/release-record.js).
+// A rollback names an earlier successful delivery build, copies the record from it and deploys that
+// digest, so it never trusts an image tag that can be moved. A build that did not finish a successful
+// production release has no record and cannot be chosen. These functions need the repository checked out
+// (jenkins/release-record.js) and node.
 
 def componentName() {
     return env.IMAGE_REPO.substring(env.IMAGE_REPO.lastIndexOf('/') + 1)
 }
 
-// Image reference for a rollback target given by a 7-character tag: by digest when that release was
-// recorded, otherwise by tag (weaker; a WARNING says so).
-def imageForTag(String tag) {
-    def name = componentName()
-    def dir = 'releases-read'
-    def digest = ''
-    try {
-        sh "rm -rf ${dir} && git clone --quiet --depth 1 --branch releases https://github.com/dario1338/shelter-project.git ${dir}"
-        digest = sh(returnStdout: true, script: "node jenkins/release-record.js find ${dir}/releases/${name}.json ${tag}").trim()
-    } catch (e) {
-        echo "WARNING: the release records could not be read (${e.getMessage()})."
-    } finally {
-        sh "rm -rf ${dir}"
-    }
-    if (digest) {
-        echo "Release ${tag} is recorded, deploying it by digest ${digest}"
-        return "${env.IMAGE_REPO}@${digest}"
-    }
-    echo "WARNING: no record for ${tag}, so the image is taken by tag, which is weaker than by digest."
-    return "${env.IMAGE_REPO}:${tag}"
+def recordFile() {
+    return "release-record-${componentName()}.json"
 }
 
-// Appends the release to the records. The release is already live when this runs, so a failure here
-// never rolls anything back: it marks the build UNSTABLE, and the record stays archived with the build
-// so that it can be added by hand.
-def recordRelease(String commit, String digest) {
-    def name = componentName()
-    if (!digest) {
-        echo 'WARNING: this release was delivered by tag (no digest), so it is not recorded.'
+// Delivery job (the build history that holds the releases) and rollback job of the current component.
+def deliveryJob() {
+    return ['shelter-api': '/shelter-cd', 'shelter-ui': '/shelter-cd-ui', 'shelter-proxy': '/shelter-cd-proxy'][componentName()]
+}
+
+def rollbackJob() {
+    return ['shelter-api': '/shelter-rollback', 'shelter-ui': '/shelter-rollback-ui', 'shelter-proxy': '/shelter-rollback-proxy'][componentName()]
+}
+
+def readRecord(String file) {
+    def commit = sh(returnStdout: true, script: "node jenkins/release-record.js get ${file} commit").trim()
+    def digest = sh(returnStdout: true, script: "node jenkins/release-record.js get ${file} digest").trim()
+    return [commit: commit, digest: digest]
+}
+
+// The release made by delivery build number N: [commit: <40 characters>, digest: sha256:...].
+def releaseFromBuild(String number) {
+    def dir = 'record-source'
+    sh "rm -rf ${dir}"
+    try {
+        copyArtifacts(projectName: deliveryJob(), selector: specific(number), filter: recordFile(), target: dir, fingerprintArtifacts: true)
+    } catch (e) {
+        error "Build #${number} of ${deliveryJob()} has no release record (${e.getMessage()}). Only a build that completed a successful production release can be chosen, and its record must still be kept."
+    }
+    def record = readRecord("${dir}/${recordFile()}")
+    sh "rm -rf ${dir}"
+    return record
+}
+
+// Image reference for the version with this revision (40 characters, or a prefix): by digest when the
+// newest successful delivery or rollback build recorded exactly that version, otherwise by tag
+// (weaker; a WARNING says so). Used to restore what ran before when a release or a rollback fails.
+def imageForRevision(String revision) {
+    if (revision && revision.length() >= 7 && revision != 'unknown') {
+        for (job in [deliveryJob(), rollbackJob()]) {
+            try {
+                sh 'rm -rf record-source'
+                copyArtifacts(projectName: job, selector: lastSuccessful(), filter: recordFile(), target: 'record-source', optional: true)
+                if (fileExists("record-source/${recordFile()}")) {
+                    def record = readRecord("record-source/${recordFile()}")
+                    if (record.commit.startsWith(revision)) {
+                        echo "Version ${revision.take(7)} was recorded by the last successful ${job} build, using its digest ${record.digest}"
+                        return "${env.IMAGE_REPO}@${record.digest}"
+                    }
+                }
+            } catch (e) {
+                echo "WARNING: could not read the record of ${job} (${e.getMessage()})."
+            } finally {
+                sh 'rm -rf record-source'
+            }
+        }
+    }
+    echo "WARNING: no record for ${revision?.take(7)}, so the image is taken by tag, which is weaker than by digest."
+    return "${env.IMAGE_REPO}:${revision.take(7)}"
+}
+
+// The digest part of an image reference such as repo@sha256:..., or '' for a reference by tag.
+def digestOf(String image) {
+    return image.contains('@') ? image.substring(image.indexOf('@') + 1) : ''
+}
+
+// Archives the record of this release (or rollback) with the build. It is already live when this runs, so
+// a failure here never rolls anything back: the build only becomes UNSTABLE.
+def recordRelease(String commit, String digest, String action = 'release') {
+    if (!digest || !commit) {
+        echo "WARNING: this ${action} has no digest or no commit (it was done by tag or the version does not report a revision), so it is not recorded."
         return
     }
     try {
         def stamp = sh(returnStdout: true, script: 'date -u +%Y-%m-%dT%H:%M:%SZ').trim()
-        def entryFile = "release-record-${name}.json"
-        withEnv(["REC_COMMIT=${commit}", "REC_DIGEST=${digest}", "REC_TIME=${stamp}", "REC_URL=${env.BUILD_URL}", "REC_FILE=${entryFile}", "REC_NAME=${name}"]) {
-            sh 'node jenkins/release-record.js entry "$REC_COMMIT" "$REC_DIGEST" "$REC_TIME" "$REC_URL" > "$REC_FILE"'
-            archiveArtifacts artifacts: entryFile
-            withCredentials([sshUserPrivateKey(credentialsId: 'releases-deploy-key', keyFileVariable: 'DEPLOY_KEY')]) {
-                sh '''
-                    export GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$WORKSPACE/jenkins/github_known_hosts"
-                    result=no
-                    for attempt in 1 2 3; do
-                        rm -rf releases-write
-                        git clone --quiet --depth 1 --branch releases git@github.com:dario1338/shelter-project.git releases-write
-                        node jenkins/release-record.js add "releases-write/releases/$REC_NAME.json" "$REC_FILE"
-                        if git -C releases-write diff --quiet; then result=unchanged; break; fi
-                        git -C releases-write -c user.name=jenkins -c user.email=jenkins@shelter.invalid \
-                            commit --quiet -am "Record $REC_NAME release $(echo "$REC_COMMIT" | cut -c1-7)"
-                        if git -C releases-write push --quiet origin releases; then result=yes; break; fi
-                        echo "Push was rejected (attempt $attempt), trying again"
-                        sleep 3
-                    done
-                    rm -rf releases-write
-                    [ "$result" != no ]
-                '''
-            }
+        def file = recordFile()
+        withEnv(["REC_COMMIT=${commit}", "REC_DIGEST=${digest}", "REC_TIME=${stamp}", "REC_URL=${env.BUILD_URL}", "REC_FILE=${file}", "REC_ACTION=${action}"]) {
+            sh 'node jenkins/release-record.js entry "$REC_COMMIT" "$REC_DIGEST" "$REC_TIME" "$REC_URL" "$REC_ACTION" > "$REC_FILE"'
         }
-        echo "Recorded ${name} release ${commit.take(7)} (${digest})"
+        archiveArtifacts artifacts: file, fingerprint: true
+        echo "Recorded ${componentName()} ${action} ${commit.take(7)} (${digest}) with build #${env.BUILD_NUMBER}"
     } catch (e) {
-        echo "WARNING: the release is live but could not be recorded: ${e.getMessage()}"
-        unstable('The release is live, but it could not be recorded on the releases branch')
+        echo "WARNING: the ${action} is live but could not be recorded: ${e.getMessage()}"
+        unstable("The ${action} is live, but its record could not be archived")
     }
 }
 

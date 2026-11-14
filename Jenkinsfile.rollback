@@ -6,13 +6,16 @@ pipeline {
     agent none
 
     parameters {
-        string(name: 'TARGET_TAG', defaultValue: '',
-               description: 'OPTIONAL: 7-character image tag from Docker Hub to roll back to. Leave empty to switch back to the version the idle instance currently holds (fast path).')
+        string(name: 'TARGET_BUILD', defaultValue: '',
+               description: 'OPTIONAL: number of an earlier successful delivery build of the API (job shelter-cd) to roll back to. Leave empty to switch back to the version the idle instance currently holds (fast path).')
     }
 
     options {
         disableConcurrentBuilds()
         timeout(time: 60, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+        // A failed release or rollback restores what ran before; the record of the last successful rollback may say which digest that was.
+        copyArtifactPermission('shelter-cd*,shelter-rollback*')
     }
 
     stages {
@@ -32,11 +35,20 @@ pipeline {
                 stage('Inspect production') {
                     steps {
                         script {
-                            def tag = (params.TARGET_TAG ?: '').trim()
-                            if (tag && !(tag ==~ /^[0-9a-f]{7}$/)) {
-                                error "TARGET_TAG must be a 7-character lowercase hex tag, got: '${tag}'"
+                            def buildNumber = (params.TARGET_BUILD ?: '').trim()
+                            if (buildNumber && !(buildNumber ==~ /^[0-9]+$/)) {
+                                error "TARGET_BUILD must be the number of an earlier delivery build (digits only), got: '${buildNumber}'"
                             }
-                            env.TARGET_TAG_CLEAN = tag
+                            env.TARGET_BUILD_CLEAN = buildNumber
+                            env.TARGET_COMMIT = ''
+                            env.TARGET_DIGEST = ''
+                            if (buildNumber) {
+                                // The record of that build: which commit and which image digest it released to production.
+                                def target = render.releaseFromBuild(buildNumber)
+                                env.TARGET_COMMIT = target.commit
+                                env.TARGET_DIGEST = target.digest
+                                currentBuild.displayName = "#${env.BUILD_NUMBER} to ${target.commit.take(7)}"
+                            }
 
                             render.resolveInstances()
 
@@ -52,17 +64,17 @@ pipeline {
                             }
                             echo "Production (${env.ACTIVE_HOST}) revision: ${env.ACTIVE_REVISION}"
 
-                            if (tag) {
-                                if (env.ACTIVE_REVISION.startsWith(tag)) {
-                                    error "Production already runs ${tag}, nothing to roll back"
+                            if (buildNumber) {
+                                if (env.ACTIVE_REVISION == env.TARGET_COMMIT) {
+                                    error "Production already runs ${env.TARGET_COMMIT.take(7)}, nothing to roll back"
                                 }
-                                env.TARGET_DESCRIPTION = "image ${tag}, which will first be deployed to the idle instance ${env.IDLE_HOST}"
+                                env.TARGET_DESCRIPTION = "${env.TARGET_COMMIT.take(7)} (delivery build #${buildNumber}, ${env.TARGET_DIGEST}), which will first be deployed to the idle instance ${env.IDLE_HOST}"
                             } else {
                                 // Also wakes up the idle instance, so that the switch itself is fast.
                                 render.waitHealthy("https://${env.IDLE_HOST}")
                                 def idleRevision = render.fetchRevision("https://${env.IDLE_HOST}")
                                 if (idleRevision && idleRevision == env.ACTIVE_REVISION) {
-                                    error "The idle instance runs the same revision as production (${idleRevision}), nothing to roll back to. Use TARGET_TAG to pick an older image."
+                                    error "The idle instance runs the same revision as production (${idleRevision}), nothing to roll back to. Use TARGET_BUILD to pick an earlier release."
                                 }
                                 env.TARGET_DESCRIPTION = "the version held by the idle instance ${env.IDLE_HOST} (revision ${idleRevision ?: 'unknown'})"
                             }
@@ -103,17 +115,16 @@ pipeline {
                             error "Production traffic moved from ${activeAtApproval} to ${env.ACTIVE_HOST} while waiting for approval. Aborting, please inspect and run again."
                         }
 
-                        def tag = env.TARGET_TAG_CLEAN
-                        if (tag) {
-                            def deployId = render.deployImage(env.IDLE_ID, render.imageForTag(tag))
+                        if (env.TARGET_DIGEST) {
+                            def deployId = render.deployImage(env.IDLE_ID, "${env.IMAGE_REPO}@${env.TARGET_DIGEST}")
                             render.waitForDeploy(env.IDLE_ID, deployId)
                         }
 
                         // Verify the target BEFORE it receives traffic (directly, which also wakes it up).
                         render.waitHealthy("https://${env.IDLE_HOST}")
                         def revision = render.fetchRevision("https://${env.IDLE_HOST}")
-                        if (tag && revision && !revision.startsWith(tag)) {
-                            error "Idle instance reports revision ${revision}, expected an image tagged ${tag}"
+                        if (env.TARGET_COMMIT && revision && revision != env.TARGET_COMMIT) {
+                            error "Idle instance reports revision ${revision}, expected ${env.TARGET_COMMIT}"
                         }
                         if (!revision) {
                             echo 'WARNING: the target version does not report a revision (no /api/info). Only health and routing will be verified.'
@@ -135,6 +146,11 @@ pipeline {
                             error "Rollback failed and traffic was restored to ${env.ACTIVE_HOST}: ${e.getMessage()}"
                         }
                         echo "Production now runs ${revision ?: 'an older version'} on ${env.IDLE_HOST}"
+
+                        // Reached only when the rollback succeeded (the catch block above always ends with error).
+                        // Without TARGET_BUILD the idle instance already held the version, so its digest comes from the records.
+                        def rolledBackDigest = env.TARGET_DIGEST ?: (revision ? render.digestOf(render.imageForRevision(revision)) : '')
+                        render.recordRelease(env.TARGET_COMMIT ?: revision, rolledBackDigest, 'rollback')
                     }
                 }
             }
