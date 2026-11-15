@@ -45,8 +45,10 @@ change, tested with a real signature.
   through Jenkins (the rollback stops before the approval, with the cosign error). The automatic rollback
   after a failed release restores the version that was running and does not verify it.
 - Manual delivery without a digest (tag only) is not verified; the log says so.
-- Signatures are objects in Docker Hub (tags `sha256-<digest>.sig`). Deleting them, or the image, makes
-  rollback to that release impossible; Docker Hub retention must not remove them.
+- Cosign 3 stores the signature in Docker Hub as an OCI referrer of the image, an object without a tag, so it is
+  not in the list of tags (`cosign tree docker.io/dario1338/<image>@sha256:<digest>` shows it). Deleting it, or
+  the image, makes rollback to that release impossible; a Docker Hub clean-up of untagged objects, if one is
+  ever set, must not remove it (to be checked when the retention of the images is decided).
 - The private key is a file in `/opt/shelter-jenkins/secrets` and inside `jenkins_home`; it is protected by
   its password and by access to the server, and must be part of the backup of the secrets.
 
