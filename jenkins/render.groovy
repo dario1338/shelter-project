@@ -464,19 +464,26 @@ def e2e() {
     ]) {
         try {
             timeout(time: 20, unit: 'MINUTES') {
-                sh '''
-                    docker build -t "$E2E_IMAGE" e2e
-                    docker rm -f "$E2E_CONTAINER" >/dev/null 2>&1 || true
-                    status=0
-                    docker run --name "$E2E_CONTAINER" --init --ipc=host -e E2E_BASE_URL "$E2E_IMAGE" || status=$?
-                    rm -rf e2e-report
-                    mkdir e2e-report
-                    docker cp "$E2E_CONTAINER:/e2e/playwright-report" e2e-report/playwright-report || true
-                    docker cp "$E2E_CONTAINER:/e2e/test-results" e2e-report/test-results || true
-                    docker rm -f "$E2E_CONTAINER" >/dev/null 2>&1 || true
-                    docker rmi -f "$E2E_IMAGE" >/dev/null 2>&1 || true
-                    exit "$status"
-                '''
+                // The administrator of the STAGING application (its own account, not the production one) goes to the
+                // container as environment variables, by name only: the values never appear in the command.
+                withCredentials([usernamePassword(credentialsId: 'staging-e2e-admin',
+                                                  usernameVariable: 'E2E_ADMIN_EMAIL',
+                                                  passwordVariable: 'E2E_ADMIN_PASSWORD')]) {
+                    sh '''
+                        docker build -t "$E2E_IMAGE" e2e
+                        docker rm -f "$E2E_CONTAINER" >/dev/null 2>&1 || true
+                        status=0
+                        docker run --name "$E2E_CONTAINER" --init --ipc=host \
+                            -e E2E_BASE_URL -e E2E_ADMIN_EMAIL -e E2E_ADMIN_PASSWORD "$E2E_IMAGE" || status=$?
+                        rm -rf e2e-report
+                        mkdir e2e-report
+                        docker cp "$E2E_CONTAINER:/e2e/playwright-report" e2e-report/playwright-report || true
+                        docker cp "$E2E_CONTAINER:/e2e/test-results" e2e-report/test-results || true
+                        docker rm -f "$E2E_CONTAINER" >/dev/null 2>&1 || true
+                        docker rmi -f "$E2E_IMAGE" >/dev/null 2>&1 || true
+                        exit "$status"
+                    '''
+                }
             }
         } finally {
             archiveArtifacts artifacts: 'e2e-report/**', allowEmptyArchive: true
