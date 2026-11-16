@@ -98,6 +98,16 @@ pipeline {
                         }
                     }
                 }
+
+                // Browser tests (e2e/) of the whole staging application, through the staging proxy: what the
+                // smoke tests cannot see, such as signing in, and the API and the UI working together.
+                stage('Staging: end-to-end tests') {
+                    steps {
+                        script {
+                            render.e2e()
+                        }
+                    }
+                }
             }
         }
 

@@ -1,7 +1,7 @@
 // Shared helpers of the delivery and rollback pipelines of the API, the UI and the proxy
 // (Jenkinsfile.cd*, Jenkinsfile.rollback*). Loaded with `load 'jenkins/render.groovy'`; call init() once after loading.
 // All functions expect RENDER_KEY to be bound by the caller (withCredentials), except serviceEnvVar(),
-// proxyEnvVar(), resolveInstances() and smokeProxy(), which bind it themselves.
+// proxyEnvVar(), resolveInstances(), smokeProxy() and e2e(), which bind it themselves.
 
 def init() {
     env.RENDER_API  = 'https://api.render.com/v1'
@@ -14,6 +14,9 @@ def init() {
     env.GREEN_HOST  = 'shelter-api-green.onrender.com'
     env.PROXY_ID    = 'srv-db2fmnm7bikc73dkdtv0'
     env.PROXY_URL   = 'https://shelter-proxy-7gcs.onrender.com'
+    // The staging proxy: in front of the staging API and the staging UI, it is where the end-to-end tests go.
+    env.STAGING_PROXY_ID  = 'srv-dbpfil3m8hqs73dpc3og'
+    env.STAGING_PROXY_URL = 'https://shelter-proxy-staging.onrender.com'
 
     // Settings of the component being delivered. The defaults describe the API.
     env.UPSTREAM_KEY   = 'API_UPSTREAM'   // proxy variable that points to the active instance
@@ -43,8 +46,8 @@ def useComponent(String name) {
         // The proxy is stateless and has one staging and one production service. Both are reached
         // through their own address, so the "proxy" settings below describe the service itself.
         env.IMAGE_REPO     = 'docker.io/dario1338/shelter-proxy'
-        env.STAGING_ID     = 'srv-dbpfil3m8hqs73dpc3og'
-        env.STAGING_URL    = 'https://shelter-proxy-staging.onrender.com'
+        env.STAGING_ID     = env.STAGING_PROXY_ID
+        env.STAGING_URL    = env.STAGING_PROXY_URL
         env.PROD_ID        = env.PROXY_ID
         env.PROD_URL       = env.PROXY_URL
         env.HEALTH_PATH    = '/proxy-health'
@@ -441,6 +444,44 @@ def smokeProxy(String baseUrl, String proxyServiceId) {
         error "The proxy serves the UI from '${uiServedBy}', expected '${uiHost}'"
     }
     echo "Proxy smoke tests passed for ${baseUrl}"
+}
+
+// End-to-end tests (folder e2e/, Playwright): a real browser goes through the whole staging application,
+// through the staging proxy, so what is tried is the path a user takes. They run in the official Playwright
+// image, started by "docker run" like the other containers of the pipeline; nothing is installed on the agent.
+// The agent is itself a container that uses the Docker of the host, so a mounted folder would point to the host,
+// not to the agent: the tests are baked into the image, and the report is copied out of the container with
+// "docker cp" and kept as an artifact of the build (the HTML report, with traces and screenshots of failures).
+// The sleeping services are woken first: the proxy does not wake the API and the UI behind it.
+def e2e() {
+    wakeHost(env.STAGING_PROXY_URL.replace('https://', ''), '/proxy-health')
+    wakeUpstreams(env.STAGING_PROXY_ID)
+    def suffix = env.BUILD_TAG.toLowerCase().replaceAll('[^a-z0-9_.-]', '-')
+    withEnv([
+        "E2E_BASE_URL=${env.STAGING_PROXY_URL}",
+        "E2E_IMAGE=shelter-e2e:${suffix}",
+        "E2E_CONTAINER=shelter-e2e-${suffix}",
+    ]) {
+        try {
+            timeout(time: 20, unit: 'MINUTES') {
+                sh '''
+                    docker build -t "$E2E_IMAGE" e2e
+                    docker rm -f "$E2E_CONTAINER" >/dev/null 2>&1 || true
+                    status=0
+                    docker run --name "$E2E_CONTAINER" --init --ipc=host -e E2E_BASE_URL "$E2E_IMAGE" || status=$?
+                    rm -rf e2e-report
+                    mkdir e2e-report
+                    docker cp "$E2E_CONTAINER:/e2e/playwright-report" e2e-report/playwright-report || true
+                    docker cp "$E2E_CONTAINER:/e2e/test-results" e2e-report/test-results || true
+                    docker rm -f "$E2E_CONTAINER" >/dev/null 2>&1 || true
+                    docker rmi -f "$E2E_IMAGE" >/dev/null 2>&1 || true
+                    exit "$status"
+                '''
+            }
+        } finally {
+            archiveArtifacts artifacts: 'e2e-report/**', allowEmptyArchive: true
+        }
+    }
 }
 
 // Verifies that an image was signed by our CI key. The public key is in the repository (jenkins/cosign.pub),
