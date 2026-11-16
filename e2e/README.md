@@ -11,6 +11,7 @@ approval, so a release that breaks a user flow stops before production.
 |---|---|---|
 | `tests/browse.spec.ts` | a visitor opens the home page, the list of dogs and, if there is a dog, its page | no |
 | `tests/account.spec.ts` | a new user registers, signs out and signs in again | one user per run |
+| `tests/admin-dogs.spec.ts` | the administrator adds a dog, a visitor who is not signed in opens its page, the administrator deletes it | a dog, deleted at the end (also when the test fails) |
 
 The tests are few on purpose: the unit, integration and acceptance tests of the API and the UI cover the details,
 and a browser test is slow and can fail for reasons that are not a defect. These cover the flows whose failure a user
@@ -30,10 +31,13 @@ docker run --rm --init --ipc=host -e E2E_BASE_URL=https://shelter-proxy-staging.
 
 ## Limits
 
-- The staging schema can be empty, so the dog is opened only if there is one. A later test that creates its own dog
-  (as the admin) will make this unconditional.
+- `browse.spec.ts` opens a dog only if the staging schema has one; the administrator test, which makes its own dog,
+  is the one that always checks a dog page.
 - Every run adds one user to the staging schema; the API cannot delete users.
-- The tests that need the admin account (creating a dog, approving a sponsorship) are not written yet.
+- The administrator test needs the account of the administrator of **staging** (Jenkins credential `staging-e2e-admin`,
+  from the Docker secrets `staging_e2e_admin_email` and `staging_e2e_admin_password`). It must be an account with its
+  own password, not the one of the production administrator. Without the credential the stage fails; it is never skipped.
+- Sponsorships (a user applies, the administrator approves) and photo upload are not tested.
 - One repeat of a failed test is allowed (`retries: 1`); a test that passes only the second time is reported as flaky.
 - The version of `@playwright/test` (`package.json`) and the tag of the image (`Dockerfile`) must be the same;
   Dependabot is not set up for this folder because it would update one without the other. Update both together.

@@ -31,6 +31,8 @@ services:
       - render_api_key
       - cosign_key
       - cosign_password
+      - staging_e2e_admin_email
+      - staging_e2e_admin_password
       - jenkins_agent_key
     networks:
       - ci
@@ -86,5 +88,9 @@ secrets:
     file: ${SECRETS_DIR:-./secrets}/cosign_key
   cosign_password:
     file: ${SECRETS_DIR:-./secrets}/cosign_password
+  staging_e2e_admin_email:
+    file: ${SECRETS_DIR:-./secrets}/staging_e2e_admin_email
+  staging_e2e_admin_password:
+    file: ${SECRETS_DIR:-./secrets}/staging_e2e_admin_password
   jenkins_agent_key:
     file: ${SECRETS_DIR:-./secrets}/jenkins_agent_key
