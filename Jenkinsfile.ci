@@ -5,6 +5,49 @@ def trivyScan(String image) {
     sh "trivy image --no-progress --timeout 15m --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 ${image}"
 }
 
+// Pushes an image and returns its registry digest (sha256:...). The digest is the identity of the
+// exact content that was scanned and pushed; delivery uses it instead of the movable tag.
+def pushImage(String image, String name) {
+    def log = "push-${name}.log"
+    sh "docker push ${image} > ${log} 2>&1 || { cat ${log}; exit 1; }; cat ${log}"
+    def digest = sh(script: "grep -Eo 'digest: sha256:[0-9a-f]{64}' ${log} | tail -1 | cut -d' ' -f2", returnStdout: true).trim()
+    sh "rm -f ${log}"
+    if (!(digest ==~ /^sha256:[0-9a-f]{64}$/)) {
+        error "Could not read the digest of ${image} from the push output"
+    }
+    echo "Pushed ${image} with digest ${digest}"
+    return digest
+}
+
+// Signs the pushed image with the CI key. The signature is bound to the digest (never to a tag) and stored in
+// the registry next to the image. It must run inside the Docker Hub login, because cosign pushes the signature
+// with the same credentials. Key and password come from Jenkins credentials as environment variables, so they
+// never appear on a command line or in the log. The signing config lists no transparency log: the public one
+// would publish the image name and digest, and signing with our own key does not need it (jenkins/SIGNING.md).
+def signImage(String image, String digest) {
+    def repository = image.substring(0, image.lastIndexOf(':'))
+    withCredentials([string(credentialsId: 'cosign-key', variable: 'COSIGN_KEY'),
+                     string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')]) {
+        withEnv(["IMAGE_TO_SIGN=${repository}@${digest}"]) {
+            sh 'cosign sign --yes --key env://COSIGN_KEY --signing-config="${WORKSPACE}/jenkins/cosign-signing-config.json" "${IMAGE_TO_SIGN}"'
+        }
+    }
+    echo "Signed ${repository}@${digest}"
+}
+
+// Software Bill of Materials: the inventory of a finished image (operating system packages and
+// libraries) as CycloneDX JSON, kept with the build under "Build Artifacts". The file is written to the
+// workspace root, outside the component directories, so it never ends up in a Docker build context.
+// Trivy does not scan for vulnerabilities in this mode; the scans above do that.
+def writeSbom(String image, String name) {
+    def file = "sbom/${name}.cdx.json"
+    dir(env.WORKSPACE) {
+        sh "mkdir -p sbom && trivy image --no-progress --timeout 15m --format cyclonedx --output ${file} ${image}"
+        sh "grep -Eq '\"bomFormat\" *: *\"CycloneDX\"' ${file}"
+        archiveArtifacts artifacts: file, fingerprint: true
+    }
+}
+
 // Decide which components a build has to cover.
 //  - Pull request: files changed compared to the target branch. A change of the pipeline itself
 //    (this file, jenkins/) selects every component, so the change is verified on all of them.
@@ -49,6 +92,11 @@ def detectChangedComponents() {
 
 pipeline {
     agent { label 'docker' }
+
+    options {
+        // Keep the history of every branch and pull request bounded; the SBOMs are small but there are three per build.
+        buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '10'))
+    }
 
     stages {
         stage('Checkout') {
@@ -153,6 +201,7 @@ pipeline {
                         try {
                             sh "docker build --pull --no-cache-filter runtime --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
                             trivyScan(checkTag)
+                            writeSbom(checkTag, "shelter-api-${env.GIT_COMMIT.take(7)}")
                         } finally {
                             sh "docker rmi -f ${checkTag} || true"
                         }
@@ -176,11 +225,13 @@ pipeline {
                         try {
                             sh "docker buildx build --pull --no-cache-filter runtime --platform linux/amd64 --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${imageTag} --load ."
                             trivyScan(imageTag)
+                            writeSbom(imageTag, "shelter-api-${env.GIT_COMMIT.take(7)}")
 
                             withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                                 try {
                                     sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-                                    sh "docker push ${imageTag}"
+                                    env.API_IMAGE_DIGEST = pushImage(imageTag, "api")
+                                    signImage(imageTag, env.API_IMAGE_DIGEST)
                                 } finally {
                                     sh 'docker logout || true'
                                 }
@@ -280,6 +331,7 @@ pipeline {
                         try {
                             sh "docker build --pull --no-cache-filter runtime --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
                             trivyScan(checkTag)
+                            writeSbom(checkTag, "shelter-ui-${env.GIT_COMMIT.take(7)}")
                         } finally {
                             sh "docker rmi -f ${checkTag} || true"
                         }
@@ -303,11 +355,13 @@ pipeline {
                         try {
                             sh "docker buildx build --pull --no-cache-filter runtime --platform linux/amd64 --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${imageTag} --load ."
                             trivyScan(imageTag)
+                            writeSbom(imageTag, "shelter-ui-${env.GIT_COMMIT.take(7)}")
 
                             withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                                 try {
                                     sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-                                    sh "docker push ${imageTag}"
+                                    env.UI_IMAGE_DIGEST = pushImage(imageTag, "ui")
+                                    signImage(imageTag, env.UI_IMAGE_DIGEST)
                                 } finally {
                                     sh 'docker logout || true'
                                 }
@@ -337,6 +391,7 @@ pipeline {
                         try {
                             sh "docker build --pull --no-cache --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
                             trivyScan(checkTag)
+                            writeSbom(checkTag, "shelter-proxy-${env.GIT_COMMIT.take(7)}")
                             sh "docker run --rm -e API_UPSTREAM=example.com -e UI_UPSTREAM=example.com ${checkTag} nginx -t"
                             sh "sh ./verify.sh ${checkTag} ${env.GIT_COMMIT}"
                         } finally {
@@ -362,11 +417,13 @@ pipeline {
                         try {
                             sh "docker buildx build --pull --no-cache --platform linux/amd64 --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${imageTag} --load ."
                             trivyScan(imageTag)
+                            writeSbom(imageTag, "shelter-proxy-${env.GIT_COMMIT.take(7)}")
 
                             withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                                 try {
                                     sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-                                    sh "docker push ${imageTag}"
+                                    env.PROXY_IMAGE_DIGEST = pushImage(imageTag, "proxy")
+                                    signImage(imageTag, env.PROXY_IMAGE_DIGEST)
                                 } finally {
                                     sh 'docker logout || true'
                                 }
@@ -392,7 +449,8 @@ pipeline {
             }
             steps {
                 build job: '/shelter-cd',
-                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT)],
+                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT),
+                                   string(name: 'IMAGE_DIGEST', value: env.API_IMAGE_DIGEST)],
                       wait: false
             }
         }
@@ -406,7 +464,8 @@ pipeline {
             }
             steps {
                 build job: '/shelter-cd-ui',
-                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT)],
+                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT),
+                                   string(name: 'IMAGE_DIGEST', value: env.UI_IMAGE_DIGEST)],
                       wait: false
             }
         }
@@ -420,7 +479,8 @@ pipeline {
             }
             steps {
                 build job: '/shelter-cd-proxy',
-                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT)],
+                      parameters: [string(name: 'GIT_COMMIT_FULL', value: env.GIT_COMMIT),
+                                   string(name: 'IMAGE_DIGEST', value: env.PROXY_IMAGE_DIGEST)],
                       wait: false
             }
         }

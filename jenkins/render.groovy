@@ -96,6 +96,104 @@ def deployImage(String serviceId, String imageUrl) {
     return startDeploy(serviceId, "{\"imageUrl\": \"${imageUrl}\"}")
 }
 
+// ---------------------------------------------------------------- Release records
+// Every successful production release (and every successful rollback) archives a small record with its
+// build: commit and image digest (release-record-<component>.json, see jenkins/release-record.js).
+// A rollback names an earlier successful delivery build, copies the record from it and deploys that
+// digest, so it never trusts an image tag that can be moved. A build that did not finish a successful
+// production release has no record and cannot be chosen. These functions need the repository checked out
+// (jenkins/release-record.js) and node.
+
+def componentName() {
+    return env.IMAGE_REPO.substring(env.IMAGE_REPO.lastIndexOf('/') + 1)
+}
+
+def recordFile() {
+    return "release-record-${componentName()}.json"
+}
+
+// Delivery job (the build history that holds the releases) and rollback job of the current component.
+def deliveryJob() {
+    return ['shelter-api': '/shelter-cd', 'shelter-ui': '/shelter-cd-ui', 'shelter-proxy': '/shelter-cd-proxy'][componentName()]
+}
+
+def rollbackJob() {
+    return ['shelter-api': '/shelter-rollback', 'shelter-ui': '/shelter-rollback-ui', 'shelter-proxy': '/shelter-rollback-proxy'][componentName()]
+}
+
+def readRecord(String file) {
+    def commit = sh(returnStdout: true, script: "node jenkins/release-record.js get ${file} commit").trim()
+    def digest = sh(returnStdout: true, script: "node jenkins/release-record.js get ${file} digest").trim()
+    return [commit: commit, digest: digest]
+}
+
+// The release made by delivery build number N: [commit: <40 characters>, digest: sha256:...].
+def releaseFromBuild(String number) {
+    def dir = 'record-source'
+    sh "rm -rf ${dir}"
+    try {
+        copyArtifacts(projectName: deliveryJob(), selector: specific(number), filter: recordFile(), target: dir, fingerprintArtifacts: true)
+    } catch (e) {
+        error "Build #${number} of ${deliveryJob()} has no release record (${e.getMessage()}). Only a build that completed a successful production release can be chosen, and its record must still be kept."
+    }
+    def record = readRecord("${dir}/${recordFile()}")
+    sh "rm -rf ${dir}"
+    return record
+}
+
+// Image reference for the version with this revision (40 characters, or a prefix): by digest when the
+// newest successful delivery or rollback build recorded exactly that version, otherwise by tag
+// (weaker; a WARNING says so). Used to restore what ran before when a release or a rollback fails.
+def imageForRevision(String revision) {
+    if (revision && revision.length() >= 7 && revision != 'unknown') {
+        for (job in [deliveryJob(), rollbackJob()]) {
+            try {
+                sh 'rm -rf record-source'
+                copyArtifacts(projectName: job, selector: lastSuccessful(), filter: recordFile(), target: 'record-source', optional: true)
+                if (fileExists("record-source/${recordFile()}")) {
+                    def record = readRecord("record-source/${recordFile()}")
+                    if (record.commit.startsWith(revision)) {
+                        echo "Version ${revision.take(7)} was recorded by the last successful ${job} build, using its digest ${record.digest}"
+                        return "${env.IMAGE_REPO}@${record.digest}"
+                    }
+                }
+            } catch (e) {
+                echo "WARNING: could not read the record of ${job} (${e.getMessage()})."
+            } finally {
+                sh 'rm -rf record-source'
+            }
+        }
+    }
+    echo "WARNING: no record for ${revision?.take(7)}, so the image is taken by tag, which is weaker than by digest."
+    return "${env.IMAGE_REPO}:${revision.take(7)}"
+}
+
+// The digest part of an image reference such as repo@sha256:..., or '' for a reference by tag.
+def digestOf(String image) {
+    return image.contains('@') ? image.substring(image.indexOf('@') + 1) : ''
+}
+
+// Archives the record of this release (or rollback) with the build. It is already live when this runs, so
+// a failure here never rolls anything back: the build only becomes UNSTABLE.
+def recordRelease(String commit, String digest, String action = 'release') {
+    if (!digest || !commit) {
+        echo "WARNING: this ${action} has no digest or no commit (it was done by tag or the version does not report a revision), so it is not recorded."
+        return
+    }
+    try {
+        def stamp = sh(returnStdout: true, script: 'date -u +%Y-%m-%dT%H:%M:%SZ').trim()
+        def file = recordFile()
+        withEnv(["REC_COMMIT=${commit}", "REC_DIGEST=${digest}", "REC_TIME=${stamp}", "REC_URL=${env.BUILD_URL}", "REC_FILE=${file}", "REC_ACTION=${action}"]) {
+            sh 'node jenkins/release-record.js entry "$REC_COMMIT" "$REC_DIGEST" "$REC_TIME" "$REC_URL" "$REC_ACTION" > "$REC_FILE"'
+        }
+        archiveArtifacts artifacts: file, fingerprint: true
+        echo "Recorded ${componentName()} ${action} ${commit.take(7)} (${digest}) with build #${env.BUILD_NUMBER}"
+    } catch (e) {
+        echo "WARNING: the ${action} is live but could not be recorded: ${e.getMessage()}"
+        unstable("The ${action} is live, but its record could not be archived")
+    }
+}
+
 def waitForDeploy(String serviceId, String deployId) {
     timeout(time: 15, unit: 'MINUTES') {
         waitUntil(initialRecurrencePeriod: 10000) {
@@ -343,6 +441,21 @@ def smokeProxy(String baseUrl, String proxyServiceId) {
         error "The proxy serves the UI from '${uiServedBy}', expected '${uiHost}'"
     }
     echo "Proxy smoke tests passed for ${baseUrl}"
+}
+
+// Verifies that an image was signed by our CI key. The public key is in the repository (jenkins/cosign.pub),
+// so the check needs nothing from Jenkins' secrets. Only digest references are accepted: a tag can be moved,
+// and the signature is bound to the digest. The signatures are not recorded in a transparency log (see
+// jenkins/SIGNING.md), hence --insecure-ignore-tlog. The reference goes through the environment, never
+// into the shell script.
+def verifySignature(String image) {
+    if (!(image ==~ /^[a-z0-9.\/_-]+@sha256:[0-9a-f]{64}$/)) {
+        error "Cannot verify '${image}': a reference with a digest (name@sha256:...) is required"
+    }
+    withEnv(["IMAGE_TO_VERIFY=${image}"]) {
+        sh 'cosign verify --key jenkins/cosign.pub --insecure-ignore-tlog=true "${IMAGE_TO_VERIFY}" > /dev/null'
+    }
+    echo "Signature verified: ${image}"
 }
 
 return this

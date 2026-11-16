@@ -32,6 +32,17 @@ RUN set -eux; \
     rm /tmp/trivy.tar.gz; \
     trivy --version
 
+# cosign: signs the images CI pushes and verifies them before delivery (see jenkins/SIGNING.md).
+# Pinned release, verified by SHA-256 (the value is the one in the checksum file published with the release).
+ARG COSIGN_VERSION=3.1.4
+ARG COSIGN_SHA256=ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2
+RUN set -eux; \
+    curl -fsSL -o /tmp/cosign "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-arm64"; \
+    echo "${COSIGN_SHA256}  /tmp/cosign" | sha256sum -c -; \
+    install -m 0755 /tmp/cosign /usr/local/bin/cosign; \
+    rm /tmp/cosign; \
+    cosign version
+
 # Node.js for the frontend build (pinned version, verified against the checksum published on nodejs.org).
 # Unpacked to /opt/node and linked into /usr/local/bin, because SSH sessions do not see Docker's ENV PATH.
 ARG NODE_VERSION=22.19.0

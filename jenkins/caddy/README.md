@@ -1,7 +1,7 @@
-# HTTPS for Jenkins and SonarQube (Caddy)
+# HTTPS for Jenkins, SonarQube and Uptime Kuma (Caddy)
 
-Caddy is the HTTPS entrance of the two administration tools. It gets and renews the certificates
-(Let's Encrypt) and passes the requests to Jenkins and SonarQube over the Docker network.
+Caddy is the HTTPS entrance of the administration tools (Jenkins, SonarQube, Uptime Kuma). It gets and renews
+the certificates (Let's Encrypt) and passes the requests to them over the Docker network.
 
 | Part | Where | Tool |
 |---|---|---|
@@ -31,7 +31,7 @@ of this.
 
 ## Files that are not in Git
 
-`.env` (copy `.env.example`): `JENKINS_HOST` and `SONAR_HOST`. Both names must point at the server (DNS) and ports 80
+`.env` (copy `.env.example`): `JENKINS_HOST`, `SONAR_HOST` and `STATUS_HOST` (Uptime Kuma). All names must point at the server (DNS) and ports 80
 and 443 must be open in the cloud security list before the first start, or the certificates are not issued.
 
 ## Start on the server
@@ -40,10 +40,10 @@ Run as root, from `/opt/shelter-jenkins/repo/jenkins/caddy`, every Compose comma
 `-f compose.yaml -f compose.production.yaml`.
 
 1. `git pull`, create `.env`, `chmod 600 .env`.
-2. `config` must show the production network as `external` and the two host names.
+2. `config` must show the production network as `external` and the three host names.
 3. Check the Caddyfile before starting:
    `docker run --rm --env-file .env -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.9-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`
-4. `up -d`, then `docker logs caddy` and look for "certificate obtained successfully" for both names.
+4. `up -d`, then `docker logs caddy` and look for "certificate obtained successfully" for every name.
 5. From another machine: `https://<jenkins host>` and `https://<sonar host>` open with a valid certificate,
    and `http://...` redirects to HTTPS.
 
@@ -66,9 +66,16 @@ Order matters: nothing is closed before its replacement works.
 Rollback of step 2 or 3: restore the old values in `.env` and recreate the service. Caddy itself can be removed with
 `down` (without `-v`) at any time.
 
+## Adding Uptime Kuma (`STATUS_HOST`)
+
+Add the host name to DNS and `STATUS_HOST` to `.env`, but **only after the administrator of Uptime Kuma exists**
+(see `jenkins/uptimekuma`): a fresh Uptime Kuma lets whoever opens it first create the administrator.
+Then `git pull`, check the Caddyfile (step 3 above), and recreate Caddy (`up -d`). Without `STATUS_HOST`
+in `.env`, `config` stops with an error, so it must be set before the next recreate.
+
 ## Known limits
 
 - The host names are free subdomains of a dynamic DNS service run by one person, without an availability agreement.
-  A domain of its own removes that dependency; only the two names in `.env` and the webhook change.
+  A domain of its own removes that dependency; only the names in `.env` and the webhook change.
 - HSTS is set to one day for now. A longer period is set when the setup has proved stable.
 - Certificates are in a volume on the same server as everything else; the volume is not backed up (they can be requested again).

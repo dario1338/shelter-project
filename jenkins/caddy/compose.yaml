@@ -1,4 +1,4 @@
-# Caddy: the HTTPS entrance for Jenkins and SonarQube. It obtains and renews the certificates
+# Caddy: the HTTPS entrance for Jenkins, SonarQube and Uptime Kuma. It obtains and renews the certificates
 # (Let's Encrypt) by itself and passes the requests on over the Docker network.
 #
 # The host names come from .env (see .env.example); they are not secret.
@@ -19,6 +19,7 @@ services:
     environment:
       JENKINS_HOST: ${JENKINS_HOST:?set it in .env}
       SONAR_HOST: ${SONAR_HOST:?set it in .env}
+      STATUS_HOST: ${STATUS_HOST:?set it in .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Certificates and the account with Let's Encrypt. Losing them means asking for new certificates,

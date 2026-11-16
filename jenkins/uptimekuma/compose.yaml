@@ -1,0 +1,31 @@
+# Uptime Kuma: checks that Jenkins, SonarQube and the application answer, and watches the
+# certificates. It is described as code here; its settings (monitors, the administrator) are data in
+# its own volume, see README.md.
+name: shelter-uptimekuma
+
+services:
+  uptime-kuma:
+    # Pinned. Dependabot proposes updates; a newer version may migrate its data, so update after a
+    # copy of the volume (see README.md).
+    image: louislam/uptime-kuma:2.5.8
+    container_name: ${UPTIME_KUMA_CONTAINER:-uptime-kuma}
+    restart: unless-stopped
+    # Only on the machine itself. The way in from outside is Caddy (jenkins/caddy), once the
+    # administrator exists. Docker publishes ports itself, so the host firewall does not apply:
+    # this bind address is what keeps the port private.
+    ports:
+      - "${UPTIME_KUMA_BIND:-127.0.0.1}:${UPTIME_KUMA_PORT:-3001}:3001"
+    volumes:
+      # Monitors, history and the administrator. Never run "down -v" on production.
+      - uptime-kuma-data:/app/data
+    networks:
+      - ci
+
+networks:
+  ci:
+    # Shared with Jenkins, SonarQube and Caddy: Uptime Kuma reaches Jenkins and SonarQube by service name.
+    name: ${CI_NETWORK:-shelter-ci-network}
+
+volumes:
+  uptime-kuma-data:
+    name: ${UPTIME_KUMA_DATA_VOLUME:-shelter_uptimekuma_data}
