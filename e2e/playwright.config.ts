@@ -23,6 +23,10 @@ export default defineConfig({
     baseURL,
     // A fixed size, so that the page always uses the same layout (the wide header).
     viewport: { width: 1280, height: 720 },
+    // Without these two Playwright waits for an action or a page for as long as the whole test may last (4 minutes),
+    // so a missing button would look like a hang. With them it fails in 30 seconds and says which step it was.
+    actionTimeout: 30_000,
+    navigationTimeout: 90_000,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
