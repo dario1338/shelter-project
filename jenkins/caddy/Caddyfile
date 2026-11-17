@@ -2,9 +2,21 @@
 # {$NAME} is replaced by the environment variable of the same name (set in compose.yaml).
 
 (common) {
-	# HSTS: the browser uses only HTTPS for this host. One day for now; raise it (e.g. to a year)
-	# when the setup has run without problems.
-	header Strict-Transport-Security "max-age=86400"
+	# The security headers are the same for every host. The ">" prefix (deferred) is needed: it sets the header
+	# after reverse_proxy has copied the headers of the application, so the application's own value is replaced
+	# and the browser gets exactly one. Without it, the header is set first and the application adds a second one
+	# (SonarQube sent its own Strict-Transport-Security, and the browser got two).
+	#
+	# HSTS: the browser uses only HTTPS for this host for a year. No includeSubDomains and no preload: they are
+	# not needed, and are hard to undo.
+	header >Strict-Transport-Security "max-age=31536000"
+	# The browser must not guess the type of a response (a text file is not run as a script).
+	header >X-Content-Type-Options "nosniff"
+	# Another site gets only the address of the host, not the whole address of the page the user came from.
+	header >Referrer-Policy "strict-origin-when-cross-origin"
+	# Only a page of the same host may put the page in a frame (protection from clickjacking). Jenkins itself sends
+	# a Content-Security-Policy in report-only mode with the same rule; SonarQube and Uptime Kuma send this header too.
+	header >X-Frame-Options "SAMEORIGIN"
 }
 
 {$JENKINS_HOST} {

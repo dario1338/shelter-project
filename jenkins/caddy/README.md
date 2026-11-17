@@ -77,5 +77,6 @@ in `.env`, `config` stops with an error, so it must be set before the next recre
 
 - The host names are free subdomains of a dynamic DNS service run by one person, without an availability agreement.
   A domain of its own removes that dependency; only the names in `.env` and the webhook change.
-- HSTS is set to one day for now. A longer period is set when the setup has proved stable.
+- HSTS is set to one year. No `includeSubDomains` and no preload, because the host names are subdomains of a service that is not ours.
+- The security headers are set in the `common` block with the `>` prefix, so they replace the headers of the application instead of being added to them (SonarQube sent its own HSTS, and the browser got two). No Content-Security-Policy is set here: Jenkins and SonarQube send their own, and a policy for the whole host would break them.
 - Certificates are in a volume on the same server as everything else; the volume is not backed up (they can be requested again).
