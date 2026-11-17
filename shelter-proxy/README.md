@@ -39,3 +39,10 @@ The delivery pipeline sets `API_UPSTREAM` when it switches the traffic between t
 
 The pull request build runs `sh verify.sh IMAGE COMMIT`, so a mistake in the configuration fails the pull request and not the
 delivery to staging.
+
+## Limits
+
+- The proxy does not wake a sleeping service. The platform wakes a free instance for requests that come from outside,
+  but not for requests that come from another service, such as this proxy. The browser therefore wakes the API instance
+  itself (it asks `/api-host` for the name), and the delivery pipeline wakes the services before it tests them.
+- The proxy forwards what it receives. It has no rate limit and no web application firewall.
