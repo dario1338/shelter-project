@@ -40,6 +40,13 @@ The delivery pipeline sets `API_UPSTREAM` when it switches the traffic between t
 The pull request build runs `sh verify.sh IMAGE COMMIT`, so a mistake in the configuration fails the pull request and not the
 delivery to staging.
 
+## Delivery
+
+A change in this directory that reaches the `main` branch is built into an image named `dario1338/shelter-proxy:<first 7 characters of the commit>`.
+The image is scanned with Trivy, an SBOM is written, and the image is pushed to Docker Hub and signed. The delivery pipeline `shelter-cd-proxy`
+then starts with the commit and the digest of the image. It verifies the signature, deploys the image to staging, checks that staging serves
+this commit (`/proxy-version`), runs the smoke tests and the end-to-end tests, and waits for an approval before it releases to production.
+
 ## Limits
 
 - The proxy does not wake a sleeping service. The platform wakes a free instance for requests that come from outside,
