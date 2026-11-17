@@ -41,7 +41,7 @@ pipeline {
                     env.TARGET_COMMIT = target.commit
                     env.TARGET_DIGEST = target.digest
                     // Roll back only to an image our CI signed (releases from before signing was introduced cannot be targeted)
-                    render.verifySignature("${env.IMAGE_REPO}@${env.TARGET_DIGEST}")
+                    render.verifySignature("${env.IMAGE_REPO}@${env.TARGET_DIGEST}", 1)
                     currentBuild.displayName = "#${env.BUILD_NUMBER} to ${target.commit.take(7)}"
 
                     // Also wakes up the service if it sleeps. '' means the running image predates /proxy-version.
