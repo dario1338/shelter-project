@@ -500,8 +500,22 @@ def verifySignature(String image) {
     if (!(image ==~ /^[a-z0-9.\/_-]+@sha256:[0-9a-f]{64}$/)) {
         error "Cannot verify '${image}': a reference with a digest (name@sha256:...) is required"
     }
+    // The check is tried up to five times, ten seconds apart. Docker Hub did not list a signature that CI had pushed
+    // a few seconds earlier ("no signatures found"), and the same check passed minutes later. A signature that
+    // really does not exist still fails the pipeline, after about forty seconds.
     withEnv(["IMAGE_TO_VERIFY=${image}"]) {
-        sh 'cosign verify --key jenkins/cosign.pub --insecure-ignore-tlog=true "${IMAGE_TO_VERIFY}" > /dev/null'
+        sh '''
+            attempt=1
+            until cosign verify --key jenkins/cosign.pub --insecure-ignore-tlog=true "${IMAGE_TO_VERIFY}" > /dev/null; do
+                if [ "$attempt" -ge 5 ]; then
+                    echo "No valid signature found after $attempt attempts"
+                    exit 1
+                fi
+                echo "Attempt $attempt failed, trying again in 10 seconds"
+                attempt=$((attempt + 1))
+                sleep 10
+            done
+        '''
     }
     echo "Signature verified: ${image}"
 }
