@@ -1,3 +1,15 @@
+// CI pipeline of the monorepo: one build covers the components that changed (Detect changes), so a change of
+// the UI alone does not run the API tests.
+//
+//   Checkout -> Detect changes
+//   Backend:  Build, Unit/Integration/Acceptance tests, Coverage Gate, SonarQube + Quality Gate, Docker
+//   UI:       Install, Lint, Unit tests with coverage, Dependency Audit, Build, SonarQube + Quality Gate, Docker
+//   Proxy:    Docker build with Trivy and SBOM, configuration check
+//   Trigger delivery (main only): hand the signed image over to shelter-cd, shelter-cd-ui or shelter-cd-proxy
+//
+// Pull requests build and scan each image but push nothing. Only the main branch pushes, signs and triggers delivery.
+// Helper functions are defined below; the pipeline itself starts at the "pipeline" block.
+
 // Scan a local image with Trivy: report HIGH/CRITICAL findings, fail the build only on CRITICAL
 // findings that already have a fix available (--ignore-unfixed).
 def trivyScan(String image) {
@@ -33,6 +45,23 @@ def signImage(String image, String digest) {
         }
     }
     echo "Signed ${repository}@${digest}"
+}
+
+// Logs in to Docker Hub, pushes the image, signs it and logs out again; returns the digest. The login and the
+// signing share one credential scope because cosign pushes the signature with the same credentials. The digest is
+// stored in a variable and returned after the block: a return inside a pipeline step block would not leave this method.
+def publishImage(String image, String name) {
+    def digest
+    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+        try {
+            sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+            digest = pushImage(image, name)
+            signImage(image, digest)
+        } finally {
+            sh 'docker logout || true'
+        }
+    }
+    return digest
 }
 
 // Software Bill of Materials: the inventory of a finished image (operating system packages and
@@ -94,6 +123,8 @@ pipeline {
     agent { label 'docker' }
 
     options {
+        // A hung build must not hold an executor of the agent for ever (delivery has the same kind of limit).
+        timeout(time: 90, unit: 'MINUTES')
         // Keep the history of every branch and pull request bounded; the SBOMs are small but there are three per build.
         buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '10'))
     }
@@ -186,7 +217,7 @@ pipeline {
             }
         }
 
-        stage('Docker: Build (verification)') {
+        stage('Backend: Docker Build (verification)') {
             when {
                 allOf {
                     not { branch 'main' }
@@ -210,7 +241,7 @@ pipeline {
             }
         }
 
-        stage('Docker: Build & Push') {
+        stage('Backend: Docker Build & Push') {
             when {
                 allOf {
                     branch 'main'
@@ -227,15 +258,7 @@ pipeline {
                             trivyScan(imageTag)
                             writeSbom(imageTag, "shelter-api-${env.GIT_COMMIT.take(7)}")
 
-                            withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                                try {
-                                    sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-                                    env.API_IMAGE_DIGEST = pushImage(imageTag, "api")
-                                    signImage(imageTag, env.API_IMAGE_DIGEST)
-                                } finally {
-                                    sh 'docker logout || true'
-                                }
-                            }
+                            env.API_IMAGE_DIGEST = publishImage(imageTag, "api")
                         } finally {
                             // The image lives on Docker Hub; do not keep a local copy on the agent
                             sh "docker rmi -f ${imageTag} || true"
@@ -357,15 +380,7 @@ pipeline {
                             trivyScan(imageTag)
                             writeSbom(imageTag, "shelter-ui-${env.GIT_COMMIT.take(7)}")
 
-                            withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                                try {
-                                    sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-                                    env.UI_IMAGE_DIGEST = pushImage(imageTag, "ui")
-                                    signImage(imageTag, env.UI_IMAGE_DIGEST)
-                                } finally {
-                                    sh 'docker logout || true'
-                                }
-                            }
+                            env.UI_IMAGE_DIGEST = publishImage(imageTag, "ui")
                         } finally {
                             sh "docker rmi -f ${imageTag} || true"
                         }
@@ -376,7 +391,7 @@ pipeline {
 
         // ------------------------------------------------------------------ Proxy
 
-        stage('Proxy: Build & verify config') {
+        stage('Proxy: Docker Build (verification)') {
             when {
                 allOf {
                     not { branch 'main' }
@@ -402,7 +417,7 @@ pipeline {
             }
         }
 
-        stage('Proxy: Build & Push') {
+        stage('Proxy: Docker Build & Push') {
             when {
                 allOf {
                     branch 'main'
@@ -419,15 +434,7 @@ pipeline {
                             trivyScan(imageTag)
                             writeSbom(imageTag, "shelter-proxy-${env.GIT_COMMIT.take(7)}")
 
-                            withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                                try {
-                                    sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-                                    env.PROXY_IMAGE_DIGEST = pushImage(imageTag, "proxy")
-                                    signImage(imageTag, env.PROXY_IMAGE_DIGEST)
-                                } finally {
-                                    sh 'docker logout || true'
-                                }
-                            }
+                            env.PROXY_IMAGE_DIGEST = publishImage(imageTag, "proxy")
                         } finally {
                             sh "docker rmi -f ${imageTag} || true"
                         }
