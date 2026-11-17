@@ -496,24 +496,25 @@ def e2e() {
 // and the signature is bound to the digest. The signatures are not recorded in a transparency log (see
 // jenkins/SIGNING.md), hence --insecure-ignore-tlog. The reference goes through the environment, never
 // into the shell script.
-def verifySignature(String image) {
+def verifySignature(String image, int attempts = 20) {
     if (!(image ==~ /^[a-z0-9.\/_-]+@sha256:[0-9a-f]{64}$/)) {
         error "Cannot verify '${image}': a reference with a digest (name@sha256:...) is required"
     }
-    // The check is tried up to five times, ten seconds apart. Docker Hub did not list a signature that CI had pushed
-    // a few seconds earlier ("no signatures found"), and the same check passed minutes later. A signature that
-    // really does not exist still fails the pipeline, after about forty seconds.
-    withEnv(["IMAGE_TO_VERIFY=${image}"]) {
+    // Delivery right after CI: Docker Hub does not list a new signature at once. It was missing for more than forty
+    // seconds twice ("no signatures found") and was there a few minutes later. So the check is repeated, by default
+    // up to twenty times, fifteen seconds apart (five minutes). A signature that really does not exist still fails
+    // the pipeline, only later. A rollback checks an old image whose signature has long been listed, so it asks once.
+    withEnv(["IMAGE_TO_VERIFY=${image}", "VERIFY_ATTEMPTS=${attempts}"]) {
         sh '''
             attempt=1
             until cosign verify --key jenkins/cosign.pub --insecure-ignore-tlog=true "${IMAGE_TO_VERIFY}" > /dev/null; do
-                if [ "$attempt" -ge 5 ]; then
+                if [ "$attempt" -ge "$VERIFY_ATTEMPTS" ]; then
                     echo "No valid signature found after $attempt attempts"
                     exit 1
                 fi
-                echo "Attempt $attempt failed, trying again in 10 seconds"
+                echo "Attempt $attempt of $VERIFY_ATTEMPTS failed, trying again in 15 seconds"
                 attempt=$((attempt + 1))
-                sleep 10
+                sleep 15
             done
         '''
     }
