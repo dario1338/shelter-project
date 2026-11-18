@@ -2,9 +2,9 @@
 // the UI alone does not run the API tests.
 //
 //   Checkout -> Detect changes
-//   Backend:  Build, Unit/Integration/Acceptance tests, Coverage Gate, SonarQube + Quality Gate, Docker
-//   UI:       Install, Lint, Unit tests with coverage, Dependency Audit, Build, SonarQube + Quality Gate, Docker
-//   Proxy:    Docker build with Trivy and SBOM, configuration check
+//   Backend:  Dockerfile Lint, Build, Unit/Integration/Acceptance tests, Coverage Gate, SonarQube + Quality Gate, Docker
+//   UI:       Dockerfile Lint, Install, Lint, Unit tests with coverage, Dependency Audit, Build, SonarQube + Quality Gate, Docker
+//   Proxy:    Dockerfile Lint, Docker build with Trivy and SBOM, configuration check
 //   Trigger delivery (main only): hand the signed image over to shelter-cd, shelter-cd-ui or shelter-cd-proxy
 //
 // Pull requests build and scan each image but push nothing. Only the main branch pushes, signs and triggers delivery.
@@ -150,6 +150,15 @@ pipeline {
 
         // ---------------------------------------------------------------- Backend
 
+        stage('Backend: Dockerfile Lint') {
+            when { expression { env.RUN_API == 'true' } }
+            steps {
+                dir('shelter-api') {
+                    sh 'hadolint --failure-threshold warning Dockerfile'
+                }
+            }
+        }
+
         stage('Backend: Build') {
             when { expression { env.RUN_API == 'true' } }
             steps {
@@ -269,6 +278,15 @@ pipeline {
         }
 
         // --------------------------------------------------------------- Frontend
+
+        stage('UI: Dockerfile Lint') {
+            when { expression { env.RUN_UI == 'true' } }
+            steps {
+                dir('shelter-ui') {
+                    sh 'hadolint --failure-threshold warning Dockerfile'
+                }
+            }
+        }
 
         stage('UI: Install') {
             when { expression { env.RUN_UI == 'true' } }
@@ -390,6 +408,15 @@ pipeline {
         }
 
         // ------------------------------------------------------------------ Proxy
+
+        stage('Proxy: Dockerfile Lint') {
+            when { expression { env.RUN_PROXY == 'true' } }
+            steps {
+                dir('shelter-proxy') {
+                    sh 'hadolint --failure-threshold warning Dockerfile'
+                }
+            }
+        }
 
         stage('Proxy: Docker Build (verification)') {
             when {
