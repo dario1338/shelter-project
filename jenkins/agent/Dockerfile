@@ -43,6 +43,18 @@ RUN set -eux; \
     rm /tmp/cosign; \
     cosign version
 
+# hadolint: lints the Dockerfiles in CI (Dockerfile Lint stages in Jenkinsfile.ci). Static binary, pinned release,
+# verified by SHA-256. The project publishes no checksum file; the value is the digest of the release asset
+# hadolint-linux-arm64 (compare it with the digest shown for that asset on the GitHub release page).
+ARG HADOLINT_VERSION=2.15.1
+ARG HADOLINT_SHA256=f6198ef8090f404dbb771abfee086eb8c48ac177f30da7fd3510aca35b344b5d
+RUN set -eux; \
+    curl -fsSL -o /tmp/hadolint "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-arm64"; \
+    echo "${HADOLINT_SHA256}  /tmp/hadolint" | sha256sum -c -; \
+    install -m 0755 /tmp/hadolint /usr/local/bin/hadolint; \
+    rm /tmp/hadolint; \
+    hadolint --version
+
 # Node.js for the frontend build (pinned version, verified against the checksum published on nodejs.org).
 # Unpacked to /opt/node and linked into /usr/local/bin, because SSH sessions do not see Docker's ENV PATH.
 ARG NODE_VERSION=22.19.0
