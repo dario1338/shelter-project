@@ -51,7 +51,7 @@ updates:
     labels:
       - "dependencies"
     ignore:
-      # Stay on the nginx stable branch (1.28); mainline is not used in production
+      # Stay on the nginx stable branch (1.30); mainline is not used in production
       - dependency-name: "nginx"
         update-types:
           - "version-update:semver-major"
@@ -147,7 +147,7 @@ updates:
     labels:
       - "dependencies"
     ignore:
-      # Stay on the Node LTS line (22) and the nginx stable branch (1.28), like the proxy
+      # Stay on the Node LTS line (22) and the nginx stable branch (1.30), like the proxy
       - dependency-name: "node"
         update-types:
           - "version-update:semver-major"

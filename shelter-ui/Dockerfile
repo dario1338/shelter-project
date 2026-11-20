@@ -7,7 +7,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.28-alpine AS runtime
+FROM nginx:1.30-alpine AS runtime
 # Pick up OS security fixes newer than the base image, like the API and proxy images do
 RUN apk upgrade --no-cache
 ARG GIT_COMMIT=unknown
