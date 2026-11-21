@@ -18,6 +18,12 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -38,14 +44,23 @@ public class SecurityConfig {
     private static final String USER_ROLE = "USER";
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) {
+    public SecurityFilterChain filterChain(HttpSecurity http, RefreshTokenProperties refreshProperties) {
         http
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // Spring's CSRF filter is disabled on purpose. Every endpoint except /refresh and /logout
-                // authenticates with the Authorization header, which a browser never attaches by itself.
-                // /refresh and /logout use the refresh cookie (SameSite=Strict, Path=/api/auth) and
-                // additionally validate the Origin header (see OriginValidator).
-                .csrf(csrf -> csrf.disable())
+                // CSRF protection (double-submit cookie) is enforced only where a browser attaches
+                // credentials by itself: /refresh and /logout use the refresh cookie. Every other endpoint
+                // authenticates with the Authorization header, which a browser never adds on its own.
+                // The token is issued as a cookie readable by the client (XSRF-TOKEN, SameSite=Strict) and
+                // must be echoed in the X-XSRF-TOKEN header. The Origin check in OriginValidator stays as
+                // an additional layer.
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfTokenRepository(refreshProperties))
+                        // The plain handler compares the raw cookie value; the default one expects a masked token.
+                        .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                        .requireCsrfProtectionMatcher(cookieAuthenticatedEndpoints()))
+                // Without this filter the cookie would be written only when the token is read, so the client
+                // would not have it before its first call to /refresh.
+                .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/health", "/api/info").permitAll()
                         // Spring forwards errors (for example validation failures) to /error
@@ -75,6 +90,22 @@ public class SecurityConfig {
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
         return http.build();
+    }
+
+    private static CookieCsrfTokenRepository csrfTokenRepository(RefreshTokenProperties refreshProperties) {
+        // HttpOnly is off on purpose: the client script has to read the value and send it back in a header.
+        CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        repository.setCookieCustomizer(cookie -> cookie
+                .secure(refreshProperties.cookieSecure())
+                .sameSite("Strict"));
+        return repository;
+    }
+
+    private static RequestMatcher cookieAuthenticatedEndpoints() {
+        PathPatternRequestMatcher.Builder paths = PathPatternRequestMatcher.withDefaults();
+        return new OrRequestMatcher(
+                paths.matcher(HttpMethod.POST, "/api/auth/refresh"),
+                paths.matcher(HttpMethod.POST, "/api/auth/logout"));
     }
 
     @Bean

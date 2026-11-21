@@ -3,6 +3,7 @@ package org.unibl.etf.shelterapi.controller;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
+import io.restassured.specification.RequestSpecification;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,6 +20,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -34,6 +36,9 @@ class SessionAcceptanceTest {
     private static final String ORIGIN = "https://app.shelter.test";
     private static final String COOKIE = "refresh_token";
     private static final String SET_COOKIE = "Set-Cookie";
+    private static final String CSRF_COOKIE = "XSRF-TOKEN";
+    private static final String CSRF_HEADER = "X-XSRF-TOKEN";
+    private static final String HEALTH = "/api/health";
     private static final String LOGIN = "/api/auth/login";
     private static final String REFRESH = "/api/auth/refresh";
     private static final String LOGOUT = "/api/auth/logout";
@@ -75,8 +80,30 @@ class SessionAcceptanceTest {
                 .when().post(LOGIN);
     }
 
+    /** Fetches a CSRF token the way the client does: from the cookie set on its first call. */
+    private String csrfToken() {
+        String token = given().when().get(HEALTH).getCookie(CSRF_COOKIE);
+        assertNotNull(token);
+        return token;
+    }
+
+    private RequestSpecification withCsrf(RequestSpecification request, String csrf) {
+        return request.cookie(CSRF_COOKIE, csrf).header(CSRF_HEADER, csrf);
+    }
+
     private Response refresh(String refreshToken) {
-        return given().header("Origin", ORIGIN).cookie(COOKIE, refreshToken).when().post(REFRESH);
+        String csrf = csrfToken();
+        return withCsrf(given().header("Origin", ORIGIN).cookie(COOKIE, refreshToken), csrf)
+                .when().post(REFRESH);
+    }
+
+    private Response logout(String refreshToken) {
+        String csrf = csrfToken();
+        RequestSpecification request = withCsrf(given().header("Origin", ORIGIN), csrf);
+        if (refreshToken != null) {
+            request.cookie(COOKIE, refreshToken);
+        }
+        return request.when().post(LOGOUT);
     }
 
     private String loginAndGetRefreshToken(String email) {
@@ -134,8 +161,9 @@ class SessionAcceptanceTest {
     void refreshRequiresAnAllowedOrigin() {
         String token = loginAndGetRefreshToken(registerUser());
 
-        given().cookie(COOKIE, token).when().post(REFRESH).then().statusCode(403);
-        given().header("Origin", "https://evil.example").cookie(COOKIE, token)
+        String csrf = csrfToken();
+        withCsrf(given().cookie(COOKIE, token), csrf).when().post(REFRESH).then().statusCode(403);
+        withCsrf(given().header("Origin", "https://evil.example").cookie(COOKIE, token), csrf)
                 .when().post(REFRESH).then().statusCode(403);
 
         // The rejected requests did not touch the token.
@@ -144,23 +172,50 @@ class SessionAcceptanceTest {
 
     @Test
     void refreshWithoutACookieIsUnauthorized() {
-        given().header("Origin", ORIGIN).when().post(REFRESH).then().statusCode(401);
+        String csrf = csrfToken();
+        withCsrf(given().header("Origin", ORIGIN), csrf).when().post(REFRESH).then().statusCode(401);
+    }
+
+    @Test
+    void everyResponseCarriesAReadableSameSiteCsrfCookie() {
+        given().when().get(HEALTH).then().statusCode(200)
+                .header(SET_COOKIE, allOf(
+                        containsString(CSRF_COOKIE + "="),
+                        containsString("Path=/"),
+                        containsString("SameSite=Strict"),
+                        containsString("Secure"),
+                        not(containsString("HttpOnly"))));
+    }
+
+    @Test
+    void refreshAndLogoutRequireTheCsrfToken() {
+        String token = loginAndGetRefreshToken(registerUser());
+        String csrf = csrfToken();
+
+        // No token at all, no header, and a header that does not match the cookie are all rejected.
+        given().header("Origin", ORIGIN).cookie(COOKIE, token).when().post(REFRESH).then().statusCode(403);
+        given().header("Origin", ORIGIN).cookie(COOKIE, token).cookie(CSRF_COOKIE, csrf)
+                .when().post(REFRESH).then().statusCode(403);
+        given().header("Origin", ORIGIN).cookie(COOKIE, token).cookie(CSRF_COOKIE, csrf)
+                .header(CSRF_HEADER, "forged-value").when().post(REFRESH).then().statusCode(403);
+        given().header("Origin", ORIGIN).cookie(COOKIE, token).when().post(LOGOUT).then().statusCode(403);
+
+        // The rejected requests neither rotated nor revoked the refresh token.
+        refresh(token).then().statusCode(200);
     }
 
     @Test
     void logoutRevokesTheRefreshTokenAndClearsTheCookie() {
         String token = loginAndGetRefreshToken(registerUser());
 
-        given().header("Origin", ORIGIN).cookie(COOKIE, token)
-                .when().post(LOGOUT)
-                .then().statusCode(204).header(SET_COOKIE, containsString("Max-Age=0"));
+        logout(token).then().statusCode(204).header(SET_COOKIE, containsString("Max-Age=0"));
 
         refresh(token).then().statusCode(401);
     }
 
     @Test
     void logoutWithoutACookieStillSucceeds() {
-        given().header("Origin", ORIGIN).when().post(LOGOUT).then().statusCode(204);
+        logout(null).then().statusCode(204);
     }
 
     @Test
