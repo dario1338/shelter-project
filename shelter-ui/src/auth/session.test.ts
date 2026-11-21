@@ -13,6 +13,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  document.cookie = 'XSRF-TOKEN=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
 })
 
 describe('login', () => {
@@ -74,6 +75,25 @@ describe('refreshSession', () => {
 
     await expect(refreshSession()).rejects.toMatchObject({ status: 500 })
   })
+
+  it('sends the CSRF token from the cookie in a header', async () => {
+    document.cookie = 'XSRF-TOKEN=token-1; path=/'
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { accessToken: 'fresh' }))
+
+    await refreshSession()
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/auth/refresh')
+    expect(init?.headers).toEqual({ 'X-XSRF-TOKEN': 'token-1' })
+  })
+
+  it('sends no CSRF header while the cookie is missing', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { accessToken: 'fresh' }))
+
+    await refreshSession()
+
+    expect(fetchMock.mock.calls[0][1]?.headers).toEqual({})
+  })
 })
 
 describe('logout', () => {
@@ -83,5 +103,16 @@ describe('logout', () => {
 
     await expect(logout()).rejects.toThrow('network')
     expect(getAccessToken()).toBeNull()
+  })
+
+  it('sends the CSRF token from the cookie in a header', async () => {
+    document.cookie = 'XSRF-TOKEN=token-2; path=/'
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }))
+
+    await logout()
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/auth/logout')
+    expect(init?.headers).toEqual({ 'X-XSRF-TOKEN': 'token-2' })
   })
 })
