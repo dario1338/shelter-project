@@ -1,4 +1,5 @@
 import { toApiError } from '../api/ApiError'
+import { csrfHeaders } from './csrf'
 import { clearAccessToken, setAccessToken } from './tokenStore'
 
 const AUTH_BASE = '/api/auth'
@@ -15,7 +16,8 @@ export interface RegistrationData {
 }
 
 // Requests are same-origin (the browser reaches the API through shelter-proxy), so the default
-// fetch credentials mode already sends the HttpOnly refresh cookie to /api/auth.
+// fetch credentials mode already sends the HttpOnly refresh cookie to /api/auth. The two calls that
+// rely on that cookie (refresh and logout) also carry the CSRF token, see csrf.ts.
 
 export async function login(email: string, password: string): Promise<void> {
   const response = await fetch(`${AUTH_BASE}/login`, {
@@ -45,7 +47,7 @@ export async function register(data: RegistrationData): Promise<void> {
 let refreshInFlight: Promise<boolean> | null = null
 
 async function requestRefresh(): Promise<boolean> {
-  const response = await fetch(`${AUTH_BASE}/refresh`, { method: 'POST' })
+  const response = await fetch(`${AUTH_BASE}/refresh`, { method: 'POST', headers: csrfHeaders() })
   if (response.status === 401 || response.status === 403) {
     clearAccessToken()
     return false
@@ -69,7 +71,7 @@ export function refreshSession(): Promise<boolean> {
 
 export async function logout(): Promise<void> {
   try {
-    await fetch(`${AUTH_BASE}/logout`, { method: 'POST' })
+    await fetch(`${AUTH_BASE}/logout`, { method: 'POST', headers: csrfHeaders() })
   } finally {
     clearAccessToken()
   }
