@@ -25,6 +25,7 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
@@ -185,6 +186,25 @@ class SessionAcceptanceTest {
                         containsString("SameSite=Strict"),
                         containsString("Secure"),
                         not(containsString("HttpOnly"))));
+    }
+
+    @Test
+    void anAuthenticatedRequestDoesNotDropTheCsrfToken() {
+        Response session = login(registerUser(), PASSWORD);
+        session.then().statusCode(200);
+        String accessToken = session.path("accessToken");
+        String refreshToken = session.getCookie(COOKIE);
+        String csrf = csrfToken();
+
+        // The page calls /me right after it refreshes the session, so nothing else renews the token before logout.
+        Response me = given().header("Authorization", "Bearer " + accessToken)
+                .cookie(CSRF_COOKIE, csrf)
+                .when().get(ME);
+        me.then().statusCode(200);
+        assertNull(me.getCookie(CSRF_COOKIE));
+
+        withCsrf(given().header("Origin", ORIGIN).cookie(COOKIE, refreshToken), csrf)
+                .when().post(LOGOUT).then().statusCode(204);
     }
 
     @Test

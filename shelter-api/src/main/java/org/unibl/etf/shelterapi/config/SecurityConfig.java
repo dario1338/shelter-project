@@ -18,6 +18,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.session.NullAuthenticatedSessionStrategy;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
@@ -57,6 +58,10 @@ public class SecurityConfig {
                         .csrfTokenRepository(csrfTokenRepository(refreshProperties))
                         // The plain handler compares the raw cookie value; the default one expects a masked token.
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                        // By default Spring drops the CSRF token whenever a request authenticates. There is no
+                        // session to protect here, and the client reads the token only once per page load, so
+                        // a dropped token would make the next logout fail.
+                        .sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy())
                         .requireCsrfProtectionMatcher(cookieAuthenticatedEndpoints()))
                 // Without this filter the cookie would be written only when the token is read, so the client
                 // would not have it before its first call to /refresh.
