@@ -46,7 +46,7 @@ services:
   # The build agent. Same image and settings as the container that runs today.
   # The service name is the host name the controller connects to (casc/10-agent.yaml).
   jenkins-agent-1:
-    image: shelter-jenkins-agent:${AGENT_TAG:-4}
+    image: shelter-jenkins-agent:${AGENT_TAG:-5}
     build:
       context: ../agent
       args:
