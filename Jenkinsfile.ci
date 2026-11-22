@@ -10,11 +10,11 @@
 // Pull requests build and scan each image but push nothing. Only the main branch pushes, signs and triggers delivery.
 // Helper functions are defined below; the pipeline itself starts at the "pipeline" block.
 
-// Scan a local image with Trivy: report HIGH/CRITICAL findings, fail the build only on CRITICAL
-// findings that already have a fix available (--ignore-unfixed).
+// Scan a local image with Trivy: print the HIGH and CRITICAL findings and fail the build if any of
+// them already has a fix available (--ignore-unfixed). A finding that is consciously accepted goes
+// into .trivyignore with a reason, instead of lowering the gate.
 def trivyScan(String image) {
-    sh "trivy image --no-progress --timeout 15m --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed ${image}"
-    sh "trivy image --no-progress --timeout 15m --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 ${image}"
+    sh "trivy image --no-progress --timeout 15m --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 ${image}"
 }
 
 // Pushes an image and returns its registry digest (sha256:...). The digest is the identity of the
