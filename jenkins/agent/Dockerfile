@@ -1,7 +1,13 @@
-FROM jenkins/ssh-agent:jdk21
+# Base image pinned by version and digest: the same image on every rebuild, and Dependabot can
+# still propose newer versions (9.5.0 is the release the running agent was built from, JDK 21.0.13)
+FROM jenkins/ssh-agent:9.5.0-jdk21@sha256:78ade73b7e8ff8b5b84a016f6a1afc9f98362908bf2f43643a42c599a8f3bd1c
 
 # GID of the host's docker group, passed at build time
 ARG DOCKER_GID
+
+# Docker CLI and buildx pinned to exact package versions (the versions the running agent uses)
+ARG DOCKER_CLI_VERSION=5:29.10.0-1~debian.13~trixie
+ARG BUILDX_VERSION=0.39.0-1~debian.13~trixie
 
 USER root
 
@@ -13,7 +19,7 @@ RUN apt-get update \
  && . /etc/os-release \
  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian ${VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list \
  && apt-get update \
- && apt-get install -y --no-install-recommends docker-ce-cli docker-buildx-plugin \
+ && apt-get install -y --no-install-recommends "docker-ce-cli=${DOCKER_CLI_VERSION}" "docker-buildx-plugin=${BUILDX_VERSION}" \
  && rm -rf /var/lib/apt/lists/*
 
 # Let the jenkins user talk to the host's docker socket
