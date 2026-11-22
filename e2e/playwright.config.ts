@@ -17,7 +17,8 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   // One repeat of a failed test, reported as "flaky" when it passes the second time, so it is not hidden.
   retries: 1,
-  reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
+  // results.json is read by the pipeline: a test that passed only on the retry makes the build UNSTABLE.
+  reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }], ['json', { outputFile: 'results.json' }]],
   outputDir: 'test-results',
   use: {
     baseURL,
