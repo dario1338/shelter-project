@@ -479,10 +479,21 @@ def e2e() {
                         mkdir e2e-report
                         docker cp "$E2E_CONTAINER:/e2e/playwright-report" e2e-report/playwright-report || true
                         docker cp "$E2E_CONTAINER:/e2e/test-results" e2e-report/test-results || true
+                        docker cp "$E2E_CONTAINER:/e2e/results.json" e2e-report/results.json || true
                         docker rm -f "$E2E_CONTAINER" >/dev/null 2>&1 || true
                         docker rmi -f "$E2E_IMAGE" >/dev/null 2>&1 || true
                         exit "$status"
                     '''
+                }
+                // A test that failed and then passed on the retry is "flaky": Playwright exits with 0, so without this
+                // check the build would stay green and the flaky test would be visible only in the report.
+                if (!fileExists('e2e-report/results.json')) {
+                    unstable('The end-to-end results (results.json) are missing, so flaky tests could not be checked')
+                } else {
+                    def flaky = (readJSON(file: 'e2e-report/results.json').stats?.flaky ?: 0) as int
+                    if (flaky > 0) {
+                        unstable("${flaky} end-to-end test(s) passed only on the retry (flaky); see the report")
+                    }
                 }
             }
         } finally {

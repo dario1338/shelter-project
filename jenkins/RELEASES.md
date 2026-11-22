@@ -21,7 +21,8 @@ delivered, and a rollback is started with the number of the build to go back to
 - Only a build that completed a successful production release has a record, so only such a build can be chosen.
   A build that failed, was rolled back automatically or was never approved has none.
 - If the record cannot be archived the release stays live and the build becomes UNSTABLE.
-- A release delivered by tag (a manual run without `IMAGE_DIGEST`) is not recorded.
+- A delivery always goes by digest: `IMAGE_DIGEST` is required and the image must carry a valid signature,
+  so there is no release by tag (and so no release without a record).
 - The records live in the Jenkins history, so they are exactly as durable as the Jenkins home volume
   (`jenkins_home`). Until that volume is backed up outside the server, losing it loses the records.
 - Build history is kept by `buildDiscarder`: delivery jobs 100 builds (records included), rollback jobs 30,
