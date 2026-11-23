@@ -39,7 +39,7 @@ public class SponsorshipApplication {
     @Column(name = "user_note", columnDefinition = "TEXT")
     private String userNote;
 
-    @Column(name = "admin_note", columnDefinition = "TEXT")
+    @Column(name = "decision_note", columnDefinition = "TEXT")
     private String adminNote;
 
     @Column(name = "created_at", nullable = false, updatable = false)
