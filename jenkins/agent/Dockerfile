@@ -75,3 +75,16 @@ RUN curl -fsSL -o /tmp/node.tar.gz "https://nodejs.org/dist/v${NODE_VERSION}/nod
     && ln -s /opt/node/bin/npx /usr/local/bin/npx \
     && node --version \
     && npm --version
+
+# Squawk: lints the PostgreSQL migrations a change adds (Backend: Migration Lint in Jenkinsfile.ci). Pinned release,
+# verified by SHA-256. The project publishes no checksum file; the value is the digest of the release asset
+# squawk-linux-arm64 (compare it with the digest shown for that asset on the GitHub release page).
+# Last layer on purpose: a new agent image then shares every other layer with the previous one (about 24 MB more).
+ARG SQUAWK_VERSION=2.68.0
+ARG SQUAWK_SHA256=122f635ec9a56239f93b5ac05cb4884d473f7840ffccac3db574fd5f138b1b18
+RUN set -eux; \
+    curl -fsSL -o /tmp/squawk "https://github.com/sbdchd/squawk/releases/download/v${SQUAWK_VERSION}/squawk-linux-arm64"; \
+    echo "${SQUAWK_SHA256}  /tmp/squawk" | sha256sum -c -; \
+    install -m 0755 /tmp/squawk /usr/local/bin/squawk; \
+    rm /tmp/squawk; \
+    squawk --version

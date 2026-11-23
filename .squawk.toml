@@ -1,0 +1,3 @@
+# Squawk, the linter for the PostgreSQL migrations of shelter-api (Backend: Migration Lint in Jenkinsfile.ci).
+# Every default rule applies. A rule may be excluded here only with the reason written next to it.
+excluded_rules = []
