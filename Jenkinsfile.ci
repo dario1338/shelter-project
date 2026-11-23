@@ -119,6 +119,35 @@ def detectChangedComponents() {
     return changed
 }
 
+// Lint the database migrations this change adds, with Squawk (rules: .squawk.toml). Only new files are linted:
+// migrations already applied in production cannot change, and they were written before the linter. A changed,
+// deleted or renamed migration fails the build, because Flyway refuses an applied migration whose content changed;
+// the fix is always a new migration. Without a base to compare with, nothing is linted (the build says so).
+def lintMigrations() {
+    def migrations = 'shelter-api/src/main/resources/db/migration'
+    def range
+    if (env.CHANGE_TARGET) {
+        range = "origin/${env.CHANGE_TARGET}...HEAD"
+    } else if (env.GIT_PREVIOUS_SUCCESSFUL_COMMIT) {
+        range = "${env.GIT_PREVIOUS_SUCCESSFUL_COMMIT} HEAD"
+    } else {
+        echo 'No previous successful build to compare with: no migration is linted.'
+        return
+    }
+    def edited = sh(returnStdout: true, script: "git diff --name-only --diff-filter=MDR ${range} -- ${migrations}").trim()
+    if (edited) {
+        error "Applied migrations must not be changed, deleted or renamed; add a new migration instead:\n${edited}"
+    }
+    def added = sh(returnStdout: true, script: "git diff --name-only --diff-filter=A ${range} -- ${migrations}").trim()
+    if (!added) {
+        echo 'This change adds no migration.'
+        return
+    }
+    echo "Linting the new migrations:\n${added}"
+    // PostgreSQL 18 runs in production; Flyway runs each PostgreSQL migration in a transaction.
+    sh "squawk --config=.squawk.toml --pg-version=18.0 --assume-in-transaction ${added.readLines().join(' ')}"
+}
+
 pipeline {
     agent { label 'docker' }
 
@@ -155,6 +184,15 @@ pipeline {
             steps {
                 dir('shelter-api') {
                     sh 'hadolint --failure-threshold warning Dockerfile'
+                }
+            }
+        }
+
+        stage('Backend: Migration Lint') {
+            when { expression { env.RUN_API == 'true' } }
+            steps {
+                script {
+                    lintMigrations()
                 }
             }
         }
