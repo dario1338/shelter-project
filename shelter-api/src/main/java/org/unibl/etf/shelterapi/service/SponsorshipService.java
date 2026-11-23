@@ -17,6 +17,8 @@ import org.unibl.etf.shelterapi.repository.DogRepository;
 import org.unibl.etf.shelterapi.repository.SponsorshipApplicationRepository;
 import org.unibl.etf.shelterapi.repository.UserRepository;
 
+import java.time.Instant;
+
 @Service
 @Transactional
 public class SponsorshipService {
@@ -83,8 +85,10 @@ public class SponsorshipService {
             throw new ConflictException("Dog is no longer available for sponsorship");
         }
 
+        Instant decidedAt = Instant.now();
         application.setStatus(ApplicationStatus.APPROVED);
         application.setAdminNote(clean(adminNote));
+        application.setDecidedAt(decidedAt);
         dog.setStatus(DogStatus.SPONSORED);
         dogRepository.save(dog);
 
@@ -93,6 +97,7 @@ public class SponsorshipService {
             if (!other.getId().equals(application.getId())) {
                 other.setStatus(ApplicationStatus.REJECTED);
                 other.setAdminNote(AUTO_REJECT_NOTE);
+                other.setDecidedAt(decidedAt);
             }
         }
         return toResponse(applicationRepository.save(application));
@@ -103,6 +108,7 @@ public class SponsorshipService {
         requirePending(application);
         application.setStatus(ApplicationStatus.REJECTED);
         application.setAdminNote(clean(adminNote));
+        application.setDecidedAt(Instant.now());
         return toResponse(applicationRepository.save(application));
     }
 
@@ -156,6 +162,7 @@ public class SponsorshipService {
                 application.getUserNote(),
                 application.getAdminNote(),
                 application.getCreatedAt(),
-                application.getUpdatedAt());
+                application.getUpdatedAt(),
+                application.getDecidedAt());
     }
 }

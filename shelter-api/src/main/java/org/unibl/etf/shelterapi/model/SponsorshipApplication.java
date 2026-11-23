@@ -45,6 +45,10 @@ public class SponsorshipApplication {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    // Set when the shelter approves or rejects the application; empty while it is pending or after a cancellation.
+    @Column(name = "decided_at")
+    private Instant decidedAt;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -108,5 +112,13 @@ public class SponsorshipApplication {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Instant getDecidedAt() {
+        return decidedAt;
+    }
+
+    public void setDecidedAt(Instant decidedAt) {
+        this.decidedAt = decidedAt;
     }
 }

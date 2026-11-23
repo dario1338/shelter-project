@@ -19,7 +19,14 @@ describe('MyApplicationsPage', () => {
       ...session,
       '/api/sponsorships/me': () =>
         jsonResponse(200, applicationPage([
-          application({ id: 1, dogName: 'Rex', status: 'REJECTED', userNote: 'Please', adminNote: 'Already sponsored' }),
+          application({
+            id: 1,
+            dogName: 'Rex',
+            status: 'REJECTED',
+            userNote: 'Please',
+            adminNote: 'Already sponsored',
+            decidedAt: '2026-11-03T09:00:00Z',
+          }),
           application({ id: 2, dogName: 'Luna', status: 'PENDING' }),
         ])),
     })
@@ -30,7 +37,10 @@ describe('MyApplicationsPage', () => {
     expect(screen.getByText('Rejected')).toBeInTheDocument()
     expect(screen.getByText('Your note: Please')).toBeInTheDocument()
     expect(screen.getByText('Shelter’s note: Already sponsored')).toBeInTheDocument()
+    expect(screen.getByText('Sent 1 Nov 2026 · Decided 3 Nov 2026')).toBeInTheDocument()
     expect(screen.getByText('Pending')).toBeInTheDocument()
+    // The pending application has no decision yet.
+    expect(screen.getByText('Sent 1 Nov 2026')).toBeInTheDocument()
   })
 
   it('offers cancelling only for a pending application', async () => {

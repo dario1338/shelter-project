@@ -6,7 +6,7 @@ import type { Application, Decision } from '../api/sponsorships'
 import { PageControls } from '../dogs/PageControls'
 import { ApplicationStatusBadge } from '../sponsorships/ApplicationStatusBadge'
 import { ApplicationStatusFilter } from '../sponsorships/ApplicationStatusFilter'
-import { formatDate, NOTE_MAX, validateNote } from '../sponsorships/format'
+import { applicationDates, NOTE_MAX, validateNote } from '../sponsorships/format'
 import { readApplicationsView, writeApplicationsView, type ApplicationsView } from '../sponsorships/listView'
 import { useApplications, useDecideApplication } from '../sponsorships/useSponsorships'
 import { ErrorAlert } from '../ui/ErrorAlert'
@@ -71,7 +71,7 @@ function ApplicationRow({ application }: Readonly<{ application: Application }>)
           {application.applicantName} ({application.applicantEmail})
         </Text>
         <Text color="fg.muted" fontSize="sm">
-          Sent {formatDate(application.createdAt)}
+          {applicationDates(application)}
         </Text>
         {application.userNote && <Text whiteSpace="pre-wrap">Applicant’s note: {application.userNote}</Text>}
         {application.adminNote && <Text whiteSpace="pre-wrap">Shelter’s note: {application.adminNote}</Text>}
