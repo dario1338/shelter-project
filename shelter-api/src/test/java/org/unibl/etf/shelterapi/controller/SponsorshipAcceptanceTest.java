@@ -20,6 +20,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
@@ -99,6 +100,7 @@ class SponsorshipAcceptanceTest {
                 .when().post(APPLICATIONS)
                 .then().statusCode(201)
                 .body("status", equalTo("PENDING"))
+                .body("decidedAt", nullValue())
                 .extract().path("id");
     }
 
@@ -121,7 +123,8 @@ class SponsorshipAcceptanceTest {
                 .when().post(APPLICATIONS + "/{id}/approve", applicationId)
                 .then().statusCode(200)
                 .body("status", equalTo("APPROVED"))
-                .body("adminNote", equalTo("Welcome"));
+                .body("adminNote", equalTo("Welcome"))
+                .body("decidedAt", notNullValue());
 
         given().when().get(DOGS + "/{id}", dogId)
                 .then().statusCode(200)
@@ -174,7 +177,8 @@ class SponsorshipAcceptanceTest {
         withToken(loser).when().get(MY_APPLICATIONS)
                 .then().statusCode(200)
                 .body("content[0].status", equalTo("REJECTED"))
-                .body("content[0].adminNote", notNullValue());
+                .body("content[0].adminNote", notNullValue())
+                .body("content[0].decidedAt", notNullValue());
     }
 
     @Test
@@ -187,7 +191,8 @@ class SponsorshipAcceptanceTest {
         withToken(admin).contentType(ContentType.JSON).body("{\"adminNote\":\"Not now\"}")
                 .when().post(APPLICATIONS + "/{id}/reject", applicationId)
                 .then().statusCode(200)
-                .body("status", equalTo("REJECTED"));
+                .body("status", equalTo("REJECTED"))
+                .body("decidedAt", notNullValue());
 
         given().when().get(DOGS + "/{id}", dogId)
                 .then().statusCode(200)
@@ -210,7 +215,8 @@ class SponsorshipAcceptanceTest {
 
         withToken(owner).when().post(APPLICATIONS + "/{id}/cancel", applicationId)
                 .then().statusCode(200)
-                .body("status", equalTo("CANCELLED"));
+                .body("status", equalTo("CANCELLED"))
+                .body("decidedAt", nullValue());
 
         withToken(owner).when().post(APPLICATIONS + "/{id}/cancel", applicationId)
                 .then().statusCode(409);

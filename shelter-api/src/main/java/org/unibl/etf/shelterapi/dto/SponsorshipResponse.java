@@ -14,6 +14,7 @@ public record SponsorshipResponse(
         String userNote,
         String adminNote,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Instant decidedAt
 ) {
 }

@@ -39,7 +39,7 @@ describe('AdminApplicationsPage', () => {
       '/api/sponsorships': () =>
         jsonResponse(200, applicationPage([
           application({ id: 1, applicantName: 'Ana Anić', applicantEmail: 'ana@example.com', userNote: 'Please', status: 'PENDING' }),
-          application({ id: 2, dogName: 'Luna', applicantName: 'Bob Bobić', applicantEmail: 'bob@example.com', status: 'REJECTED', adminNote: 'Too many dogs' }),
+          application({ id: 2, dogName: 'Luna', applicantName: 'Bob Bobić', applicantEmail: 'bob@example.com', status: 'REJECTED', adminNote: 'Too many dogs', decidedAt: '2026-11-03T09:00:00Z' }),
         ])),
     })
 
@@ -48,6 +48,7 @@ describe('AdminApplicationsPage', () => {
     expect(await screen.findByText('Ana Anić (ana@example.com)')).toBeInTheDocument()
     expect(screen.getByText('Applicant’s note: Please')).toBeInTheDocument()
     expect(screen.getByText('Shelter’s note: Too many dogs')).toBeInTheDocument()
+    expect(screen.getByText('Sent 1 Nov 2026 · Decided 3 Nov 2026')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Review' })).toHaveLength(1)
     expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/sponsorships?page=0&size=10&status=PENDING')).toBe(true)
   })

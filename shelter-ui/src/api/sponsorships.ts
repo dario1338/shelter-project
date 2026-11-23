@@ -14,6 +14,9 @@ export interface Application {
   adminNote: string | null
   createdAt: string
   updatedAt: string
+  // When the shelter approved or rejected the application. Optional on purpose: an older API version (still running
+  // during a blue-green switch, or again after a rollback) does not send it, and the page must work with both.
+  decidedAt?: string | null
 }
 
 export interface ApplicationPage {

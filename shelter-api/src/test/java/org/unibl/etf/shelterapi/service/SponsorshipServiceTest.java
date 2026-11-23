@@ -29,6 +29,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -232,6 +233,9 @@ class SponsorshipServiceTest {
         assertEquals(DogStatus.SPONSORED, rex.getStatus());
         assertEquals(ApplicationStatus.REJECTED, other.getStatus());
         assertNotNull(other.getAdminNote());
+        assertNotNull(response.decidedAt());
+        // The automatic rejection is part of the same decision, so it carries the same moment.
+        assertEquals(response.decidedAt(), other.getDecidedAt());
         verify(dogRepository).save(rex);
     }
 
@@ -274,6 +278,7 @@ class SponsorshipServiceTest {
 
         assertEquals(ApplicationStatus.REJECTED, response.status());
         assertEquals("Not now", response.adminNote());
+        assertNotNull(response.decidedAt());
         assertEquals(DogStatus.AVAILABLE, rex.getStatus());
         verify(dogRepository, never()).save(any(Dog.class));
     }
@@ -296,6 +301,8 @@ class SponsorshipServiceTest {
         SponsorshipResponse response = sponsorshipService.cancel(ANA, 10L);
 
         assertEquals(ApplicationStatus.CANCELLED, response.status());
+        // A cancellation is the applicant's own step, not a decision of the shelter.
+        assertNull(response.decidedAt());
     }
 
     @Test

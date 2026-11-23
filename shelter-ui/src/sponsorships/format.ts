@@ -1,4 +1,4 @@
-import type { ApplicationStatus } from '../api/sponsorships'
+import type { Application, ApplicationStatus } from '../api/sponsorships'
 
 export const NOTE_MAX = 1000
 
@@ -33,4 +33,12 @@ export function formatDate(iso: string): string {
     return ''
   }
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+// "Sent 1 Nov 2026", and once the shelter has decided "Sent 1 Nov 2026 · Decided 3 Nov 2026".
+// Without a decision date (pending, cancelled, or an older API that does not send it) only the first part is shown.
+export function applicationDates(application: Pick<Application, 'createdAt' | 'decidedAt'>): string {
+  const sent = `Sent ${formatDate(application.createdAt)}`
+  const decided = application.decidedAt ? formatDate(application.decidedAt) : ''
+  return decided ? `${sent} · Decided ${decided}` : sent
 }

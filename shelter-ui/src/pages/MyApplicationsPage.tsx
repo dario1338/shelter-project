@@ -5,7 +5,7 @@ import { errorMessage } from '../api/ApiError'
 import type { Application } from '../api/sponsorships'
 import { PageControls } from '../dogs/PageControls'
 import { ApplicationStatusBadge } from '../sponsorships/ApplicationStatusBadge'
-import { formatDate } from '../sponsorships/format'
+import { applicationDates } from '../sponsorships/format'
 import { useCancelApplication, useMyApplications } from '../sponsorships/useSponsorships'
 import { ErrorAlert } from '../ui/ErrorAlert'
 
@@ -28,7 +28,7 @@ function ApplicationRow({ application }: Readonly<{ application: Application }>)
           <ApplicationStatusBadge status={application.status} />
         </Flex>
         <Text color="fg.muted" fontSize="sm">
-          Sent {formatDate(application.createdAt)}
+          {applicationDates(application)}
         </Text>
         {application.userNote && <Text whiteSpace="pre-wrap">Your note: {application.userNote}</Text>}
         {application.adminNote && <Text whiteSpace="pre-wrap">Shelter’s note: {application.adminNote}</Text>}

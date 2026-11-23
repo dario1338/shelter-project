@@ -56,7 +56,7 @@ class SponsorshipControllerTest {
     }
 
     private static SponsorshipResponse response(ApplicationStatus status) {
-        return new SponsorshipResponse(10L, 5L, "Rex", ANA, "Ana Anic", status, "note", null, null, null);
+        return new SponsorshipResponse(10L, 5L, "Rex", ANA, "Ana Anic", status, "note", null, null, null, null);
     }
 
     @Test
