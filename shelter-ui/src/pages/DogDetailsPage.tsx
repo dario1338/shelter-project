@@ -9,6 +9,7 @@ import { listSearchFrom } from '../dogs/listSearch'
 import { SponsorshipSection } from '../sponsorships/ApplyForm'
 import { StatusBadge } from '../dogs/StatusBadge'
 import { useDog } from '../dogs/useDogs'
+import { BookVisitSection } from '../visits/BookVisitForm'
 import { ErrorAlert } from '../ui/ErrorAlert'
 
 // The photo keeps its width on a wide screen, and the text sits next to it instead of in the middle.
@@ -98,6 +99,7 @@ export default function DogDetailsPage() {
             </Box>
             {dog.data.description && <Text whiteSpace="pre-wrap">{dog.data.description}</Text>}
             <SponsorshipSection dog={dog.data} />
+            <BookVisitSection dog={dog.data} />
             {admin && (
               <Button asChild variant="outline" size="sm">
                 <RouterLink to={`/admin/dogs/${dog.data.id}/edit`}>Edit dog</RouterLink>

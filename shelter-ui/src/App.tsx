@@ -8,6 +8,7 @@ import AdminDogEditPage from "./pages/AdminDogEditPage";
 import AdminApplicationsPage from "./pages/AdminApplicationsPage";
 import MyDogsPage from "./pages/MyDogsPage";
 import MyApplicationsPage from "./pages/MyApplicationsPage";
+import MyVisitsPage from "./pages/MyVisitsPage";
 import LoginPage from "./pages/LoginPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -25,6 +26,7 @@ export default function App() {
         <Route element={<RequireAuth role="USER" />}>
           <Route path="/applications" element={<MyApplicationsPage />} />
           <Route path="/my-dogs" element={<MyDogsPage />} />
+          <Route path="/visits" element={<MyVisitsPage />} />
         </Route>
         <Route element={<RequireAuth role="ADMIN" />}>
           <Route path="/admin/applications" element={<AdminApplicationsPage />} />
