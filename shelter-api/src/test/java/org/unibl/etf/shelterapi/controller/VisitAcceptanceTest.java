@@ -128,6 +128,35 @@ class VisitAcceptanceTest {
     }
 
     @Test
+    void aUserCancelsTheirVisitAndTheTimeCanBeBookedAgain() {
+        int dogId = createDog();
+        LocalDate date = nextWeek();
+        String first = registerAndLogin();
+
+        int visitId = withToken(first).contentType(ContentType.JSON).body(visit(dogId, date, 13))
+                .when().post(VISITS)
+                .then().statusCode(201)
+                .extract().path("id");
+
+        // Somebody else cannot cancel it, and does not learn that it exists.
+        String second = registerAndLogin();
+        withToken(second).when().post(VISITS + "/{id}/cancel", visitId)
+                .then().statusCode(404);
+
+        withToken(first).when().post(VISITS + "/{id}/cancel", visitId)
+                .then().statusCode(200)
+                .body("status", equalTo("CANCELLED"));
+
+        withToken(first).when().post(VISITS + "/{id}/cancel", visitId)
+                .then().statusCode(409);
+
+        // The partial unique index covers only booked visits, so the cancelled time is free again.
+        withToken(second).contentType(ContentType.JSON).body(visit(dogId, date, 13))
+                .when().post(VISITS)
+                .then().statusCode(201);
+    }
+
+    @Test
     void aVisitCannotBeBookedInThePastOrOutsideOpeningHours() {
         int dogId = createDog();
         String user = registerAndLogin();

@@ -163,6 +163,55 @@ class VisitServiceTest {
         assertThrows(ResourceNotFoundException.class, () -> visitService.book(ANA, request));
     }
 
+    private static DogVisit visitOf(User user, Instant visitAt, VisitStatus status) {
+        DogVisit visit = new DogVisit(dog(DogStatus.AVAILABLE), user, visitAt);
+        ReflectionTestUtils.setField(visit, "id", 20L);
+        visit.setStatus(status);
+        return visit;
+    }
+
+    @Test
+    void cancelMarksTheOwnFutureVisitCancelled() {
+        DogVisit visit = visitOf(ana(), Instant.parse("2026-12-01T09:00:00Z"), VisitStatus.BOOKED);
+        when(visitRepository.findById(20L)).thenReturn(Optional.of(visit));
+        when(visitRepository.save(visit)).thenReturn(visit);
+
+        assertEquals(VisitStatus.CANCELLED, visitService.cancel(ANA, 20L).status());
+    }
+
+    @Test
+    void cancelDoesNotRevealTheVisitOfAnotherUser() {
+        User bob = new User("bob@example.com", "hashed", "Bob", "Bobic", Role.USER);
+        DogVisit visit = visitOf(bob, Instant.parse("2026-12-01T09:00:00Z"), VisitStatus.BOOKED);
+        when(visitRepository.findById(20L)).thenReturn(Optional.of(visit));
+
+        assertThrows(ResourceNotFoundException.class, () -> visitService.cancel(ANA, 20L));
+        verify(visitRepository, never()).save(any());
+    }
+
+    @Test
+    void cancelRefusesAVisitThatIsAlreadyCancelled() {
+        DogVisit visit = visitOf(ana(), Instant.parse("2026-12-01T09:00:00Z"), VisitStatus.CANCELLED);
+        when(visitRepository.findById(20L)).thenReturn(Optional.of(visit));
+
+        assertThrows(ConflictException.class, () -> visitService.cancel(ANA, 20L));
+    }
+
+    @Test
+    void cancelRefusesAVisitThatHasStarted() {
+        DogVisit visit = visitOf(ana(), Instant.parse("2026-11-20T09:00:00Z"), VisitStatus.BOOKED);
+        when(visitRepository.findById(20L)).thenReturn(Optional.of(visit));
+
+        assertThrows(ConflictException.class, () -> visitService.cancel(ANA, 20L));
+    }
+
+    @Test
+    void cancelThrowsWhenTheVisitDoesNotExist() {
+        when(visitRepository.findById(20L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> visitService.cancel(ANA, 20L));
+    }
+
     @Test
     void myVisitsReturnsTheVisitsOfTheUser() {
         DogVisit visit = new DogVisit(dog(DogStatus.AVAILABLE), ana(), Instant.parse("2026-12-01T09:00:00Z"));
