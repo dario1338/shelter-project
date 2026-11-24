@@ -90,6 +90,9 @@ public class SecurityConfig {
                         .hasRole(USER_ROLE)
                         .requestMatchers(HttpMethod.GET, "/api/sponsorships/me").authenticated()
                         .requestMatchers("/api/sponsorships", "/api/sponsorships/**").hasRole(ADMIN_ROLE)
+                        // Visits: users book a visit to a dog and see their own visits.
+                        .requestMatchers(HttpMethod.POST, "/api/visits").hasRole(USER_ROLE)
+                        .requestMatchers(HttpMethod.GET, "/api/visits/me").authenticated()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
