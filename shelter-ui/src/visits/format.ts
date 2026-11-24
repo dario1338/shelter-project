@@ -16,7 +16,10 @@ export function hourLabel(hour: number): string {
   return `${String(hour).padStart(2, '0')}:00`
 }
 
-// "Tue, 1 Dec 2026, 10:00"
+// Visit times are the shelter's local times, wherever the browser or the test runs (the API keeps the same zone).
+export const SHELTER_TIME_ZONE = 'Europe/Sarajevo'
+
+// "Tue, 1 Dec 2026, 10:00", in the shelter's time.
 export function formatVisitTime(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) {
@@ -29,6 +32,7 @@ export function formatVisitTime(iso: string): string {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: SHELTER_TIME_ZONE,
   })
 }
 
