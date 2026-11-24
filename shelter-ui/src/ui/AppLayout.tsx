@@ -70,7 +70,7 @@ function useNavTargets(): NavTarget[] {
   const role = state.status === 'authenticated' ? state.user.role : null
   const targets: NavTarget[] = [{ to: '/dogs', label: 'Dogs' }]
   if (role === 'USER') {
-    targets.push({ to: '/my-dogs', label: 'My dogs' }, { to: '/applications', label: 'My applications' })
+    targets.push({ to: '/my-dogs', label: 'My dogs' }, { to: '/applications', label: 'My applications' }, { to: '/visits', label: 'My visits' })
   }
   if (role === 'ADMIN') {
     targets.push({ to: '/admin/applications?status=PENDING', label: 'Applications' })
