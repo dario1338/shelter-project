@@ -3,6 +3,8 @@ package org.unibl.etf.shelterapi.controller;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -11,7 +13,6 @@ import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.ResultMatcher;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.unibl.etf.shelterapi.dto.VisitRequest;
 import org.unibl.etf.shelterapi.dto.VisitResponse;
@@ -59,12 +60,6 @@ class VisitControllerTest {
                 Instant.parse("2026-11-24T12:00:00Z"));
     }
 
-    private void postVisit(String body, ResultMatcher expected)
-            throws Exception {
-        mockMvc.perform(post(VISITS).principal(ana).contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(expected);
-    }
-
     @Test
     void bookReturnsTheCreatedVisit() throws Exception {
         when(visitService.book(eq(ANA), any(VisitRequest.class))).thenReturn(booked());
@@ -76,21 +71,16 @@ class VisitControllerTest {
                 .andExpect(jsonPath("$.dogName").value("Rex"));
     }
 
-    @Test
-    void bookRejectsAnHourBeforeOpening() throws Exception {
-        postVisit("{\"dogId\":5,\"date\":\"2026-12-01\",\"hour\":9}", status().isBadRequest());
-        verifyNoInteractions(visitService);
-    }
-
-    @Test
-    void bookRejectsAnHourWhenTheLastVisitWouldEndAfterClosing() throws Exception {
-        postVisit("{\"dogId\":5,\"date\":\"2026-12-01\",\"hour\":16}", status().isBadRequest());
-        verifyNoInteractions(visitService);
-    }
-
-    @Test
-    void bookRejectsARequestWithoutADate() throws Exception {
-        postVisit("{\"dogId\":5,\"hour\":10}", status().isBadRequest());
+    // An hour before opening, an hour whose visit would end after closing, and a request without a date.
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"dogId\":5,\"date\":\"2026-12-01\",\"hour\":9}",
+            "{\"dogId\":5,\"date\":\"2026-12-01\",\"hour\":16}",
+            "{\"dogId\":5,\"hour\":10}"
+    })
+    void bookRejectsAnInvalidRequest(String body) throws Exception {
+        mockMvc.perform(post(VISITS).principal(ana).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
         verifyNoInteractions(visitService);
     }
 
