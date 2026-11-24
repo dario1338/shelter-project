@@ -63,9 +63,30 @@ public class VisitService {
         return toResponse(visitRepository.save(new DogVisit(dog, user, visitAt)));
     }
 
+    // A user cancels their own visit while it is still ahead; the time becomes free for others again.
+    public VisitResponse cancel(String email, Long id) {
+        DogVisit visit = visitRepository.findById(id).orElseThrow(() -> notFound(id));
+        if (!visit.getUser().getEmail().equals(email)) {
+            // Do not reveal that somebody else's visit exists.
+            throw notFound(id);
+        }
+        if (visit.getStatus() != VisitStatus.BOOKED) {
+            throw new ConflictException("Only a booked visit can be cancelled");
+        }
+        if (!visit.getVisitAt().isAfter(clock.instant())) {
+            throw new ConflictException("A visit that has already started cannot be cancelled");
+        }
+        visit.setStatus(VisitStatus.CANCELLED);
+        return toResponse(visitRepository.save(visit));
+    }
+
     @Transactional(readOnly = true)
     public Page<VisitResponse> getMyVisits(String email, Pageable pageable) {
         return visitRepository.findByUserEmail(email, pageable).map(VisitService::toResponse);
+    }
+
+    private static ResourceNotFoundException notFound(Long id) {
+        return new ResourceNotFoundException("Visit with id " + id + " not found");
     }
 
     private static VisitResponse toResponse(DogVisit visit) {

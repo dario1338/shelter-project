@@ -55,6 +55,69 @@ describe('MyVisitsPage', () => {
     expect(await screen.findByRole('link', { name: 'Rex' })).toBeInTheDocument()
   })
 
+  it('cancels a booked visit after a confirmation', async () => {
+    let cancelled = false
+    routeFetch(fetchMock, {
+      ...session,
+      '/api/visits/20/cancel': () => {
+        cancelled = true
+        return jsonResponse(200, visit({ id: 20, visitAt: '2099-12-01T09:00:00Z', status: 'CANCELLED' }))
+      },
+      '/api/visits/me': () =>
+        jsonResponse(200, visitPage([visit({ id: 20, visitAt: '2099-12-01T09:00:00Z', status: cancelled ? 'CANCELLED' : 'BOOKED' })])),
+    })
+
+    renderApp('/visits')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel visit' }))
+    expect(screen.getByText('Cancel this visit?')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, cancel it' }))
+
+    expect(await screen.findByText('Cancelled')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cancel visit' })).not.toBeInTheDocument()
+    const post = fetchMock.mock.calls.find(([url]) => String(url) === '/api/visits/20/cancel')
+    expect(post?.[1]?.method).toBe('POST')
+  })
+
+  it('keeps the visit when the user changes their mind', async () => {
+    routeFetch(fetchMock, {
+      ...session,
+      '/api/visits/me': () => jsonResponse(200, visitPage([visit({ id: 20, visitAt: '2099-12-01T09:00:00Z' })])),
+    })
+
+    renderApp('/visits')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel visit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Keep it' }))
+    expect(screen.getByRole('button', { name: 'Cancel visit' })).toBeInTheDocument()
+  })
+
+  it('shows what the API says when a visit cannot be cancelled', async () => {
+    routeFetch(fetchMock, {
+      ...session,
+      '/api/visits/20/cancel': () => jsonResponse(409, { detail: 'Only a booked visit can be cancelled' }),
+      '/api/visits/me': () => jsonResponse(200, visitPage([visit({ id: 20, visitAt: '2099-12-01T09:00:00Z' })])),
+    })
+
+    renderApp('/visits')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel visit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, cancel it' }))
+    expect(await screen.findByText('Only a booked visit can be cancelled')).toBeInTheDocument()
+  })
+
+  it('does not offer cancelling a visit that is over', async () => {
+    routeFetch(fetchMock, {
+      ...session,
+      '/api/visits/me': () => jsonResponse(200, visitPage([visit({ id: 20, visitAt: '2020-01-01T09:00:00Z' })])),
+    })
+
+    renderApp('/visits')
+
+    expect(await screen.findByRole('link', { name: 'Rex' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cancel visit' })).not.toBeInTheDocument()
+  })
+
   it('shows the visits link in the menu of a user', async () => {
     routeFetch(fetchMock, { ...session, '/api/visits/me': () => jsonResponse(200, visitPage([])) })
 

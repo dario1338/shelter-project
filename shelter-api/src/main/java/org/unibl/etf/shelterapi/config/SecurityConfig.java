@@ -90,8 +90,8 @@ public class SecurityConfig {
                         .hasRole(USER_ROLE)
                         .requestMatchers(HttpMethod.GET, "/api/sponsorships/me").authenticated()
                         .requestMatchers("/api/sponsorships", "/api/sponsorships/**").hasRole(ADMIN_ROLE)
-                        // Visits: users book a visit to a dog and see their own visits.
-                        .requestMatchers(HttpMethod.POST, "/api/visits").hasRole(USER_ROLE)
+                        // Visits: users book a visit to a dog, see their own visits and cancel them.
+                        .requestMatchers(HttpMethod.POST, "/api/visits", "/api/visits/*/cancel").hasRole(USER_ROLE)
                         .requestMatchers(HttpMethod.GET, "/api/visits/me").authenticated()
                         .anyRequest().authenticated()
                 )

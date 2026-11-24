@@ -49,3 +49,8 @@ export async function bookVisit(dogId: number, date: string, hour: number): Prom
   })
   return (await response.json()) as Visit
 }
+
+export async function cancelVisit(id: number): Promise<Visit> {
+  const response = await send(`/api/visits/${id}/cancel`, { method: 'POST' })
+  return (await response.json()) as Visit
+}

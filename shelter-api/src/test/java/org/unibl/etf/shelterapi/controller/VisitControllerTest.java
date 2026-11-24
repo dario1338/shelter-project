@@ -18,6 +18,7 @@ import org.unibl.etf.shelterapi.dto.VisitRequest;
 import org.unibl.etf.shelterapi.dto.VisitResponse;
 import org.unibl.etf.shelterapi.exception.ApiExceptionHandler;
 import org.unibl.etf.shelterapi.exception.ConflictException;
+import org.unibl.etf.shelterapi.exception.ResourceNotFoundException;
 import org.unibl.etf.shelterapi.model.VisitStatus;
 import org.unibl.etf.shelterapi.service.VisitService;
 
@@ -93,6 +94,24 @@ class VisitControllerTest {
                         .content("{\"dogId\":5,\"date\":\"2026-12-01\",\"hour\":10}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value("This time is already booked for this dog"));
+    }
+
+    @Test
+    void cancelReturnsTheCancelledVisit() throws Exception {
+        when(visitService.cancel(ANA, 20L)).thenReturn(new VisitResponse(20L, 5L, "Rex",
+                Instant.parse("2026-12-01T09:00:00Z"), VisitStatus.CANCELLED, Instant.parse("2026-11-24T12:00:00Z")));
+
+        mockMvc.perform(post(VISITS + "/20/cancel").principal(ana))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+    }
+
+    @Test
+    void cancelReturnsNotFoundForAVisitOfAnotherUser() throws Exception {
+        when(visitService.cancel(ANA, 20L)).thenThrow(new ResourceNotFoundException("Visit with id 20 not found"));
+
+        mockMvc.perform(post(VISITS + "/20/cancel").principal(ana))
+                .andExpect(status().isNotFound());
     }
 
     @Test
