@@ -20,7 +20,6 @@ import org.unibl.etf.shelterapi.repository.UserRepository;
 import java.time.Instant;
 
 @Service
-@Transactional
 public class SponsorshipService {
 
     private static final String AUTO_REJECT_NOTE = "Another application for this dog was approved";
