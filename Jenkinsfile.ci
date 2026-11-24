@@ -77,6 +77,16 @@ def writeSbom(String image, String name) {
     }
 }
 
+// The tag of an image that a branch or pull request build checks and then removes. The branch build
+// and the pull request build of the same commit can run at the same time on the same Docker daemon, so
+// the tag holds the build as well as the commit: with the commit alone, one build removed the image that
+// the other was still scanning.
+def checkImageTag(String repository) {
+    // A Docker tag allows only these characters and at most 128 of them.
+    def build = env.BUILD_TAG.replaceAll('[^A-Za-z0-9_.-]', '-').take(100)
+    return "${repository}:check-${env.GIT_COMMIT.take(7)}-${build}"
+}
+
 // Decide which components a build has to cover.
 //  - Pull request: files changed compared to the target branch. A change of the pipeline itself
 //    (this file, jenkins/) selects every component, so the change is verified on all of them.
@@ -274,7 +284,7 @@ pipeline {
             steps {
                 dir('shelter-api') {
                     script {
-                        def checkTag = "shelter-api:check-${env.GIT_COMMIT.take(7)}"
+                        def checkTag = checkImageTag("shelter-api")
                         sh "docker rmi -f ${checkTag} || true"
                         try {
                             sh "docker build --pull --no-cache-filter runtime --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
@@ -405,7 +415,7 @@ pipeline {
             steps {
                 dir('shelter-ui') {
                     script {
-                        def checkTag = "shelter-ui:check-${env.GIT_COMMIT.take(7)}"
+                        def checkTag = checkImageTag("shelter-ui")
                         sh "docker rmi -f ${checkTag} || true"
                         try {
                             sh "docker build --pull --no-cache-filter runtime --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
@@ -466,7 +476,7 @@ pipeline {
             steps {
                 dir('shelter-proxy') {
                     script {
-                        def checkTag = "shelter-proxy:check-${env.GIT_COMMIT.take(7)}"
+                        def checkTag = checkImageTag("shelter-proxy")
                         sh "docker rmi -f ${checkTag} || true"
                         try {
                             sh "docker build --pull --no-cache --build-arg GIT_COMMIT=${env.GIT_COMMIT} -t ${checkTag} ."
