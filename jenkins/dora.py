@@ -34,7 +34,6 @@ What is measured:
 
 import argparse
 import base64
-import re
 import csv
 import json
 import os
@@ -66,9 +65,9 @@ RUNNING = 'running'
 
 NOT_DELIVERIES = (NO_PARAMS, INVALID_PARAMS, RUNNING)
 
-# The same rules as the stage 'Validate parameters' of the delivery pipelines.
-COMMIT = re.compile(r'^[0-9a-f]{40}$')
-DIGEST = re.compile(r'^sha256:[0-9a-f]{64}$')
+# Messages of the stage 'Validate parameters'. The build is judged by the rules it ran with: the digest
+# became required only on 2026-11-22, so earlier releases without a digest were valid deliveries.
+INVALID_PARAMETER_MESSAGES = ('GIT_COMMIT_FULL must be a full 40-character hash', 'must look like sha256:')
 
 # Messages of the catch blocks of the production stage (Jenkinsfile.cd, .cd.ui, .cd.proxy).
 CHECK_FAILED = ('Verification after the switch failed (', 'Verification failed (')
@@ -100,19 +99,29 @@ def http_text(url):
         return response.read().decode('utf-8', errors='replace')
 
 
-def rollback_outcome(base, job, number):
+def rollback_outcome(log):
     """What the log of a build whose production stage failed says about production.
 
     ROLLED_BACK: a check failed after production was changed and the previous version serves again.
     ROLLBACK_FAILED: a check failed after the change and the previous version was not restored.
     PIPELINE_FAILED: no check failed after a change; the stage stopped before it changed production.
     """
-    log = http_text(f'{base}/job/{job}/{number}/consoleText')
     if not any(message in log for message in CHECK_FAILED):
         return PIPELINE_FAILED
     if NOT_RESTORED in log or not any(message in log for message in ROLLED_BACK_MESSAGES):
         return ROLLBACK_FAILED
     return ROLLED_BACK
+
+
+def cached_log(base, job, number):
+    """A function that reads the console log of one build once, on the first call."""
+    cache = []
+
+    def read():
+        if not cache:
+            cache.append(http_text(f'{base}/job/{job}/{number}/consoleText'))
+        return cache[0]
+    return read
 
 
 def restore_minutes(base, job, number):
@@ -192,15 +201,13 @@ def is_test(params):
     return str(params.get('TEST_ROLLBACK')).lower() == 'true'
 
 
-def classify(build, stages, outcome_of_failed_production):
-    """Kind of one build. outcome_of_failed_production() reads the log, only when it is needed."""
+def classify(build, stages, read_log):
+    """Kind of one build. read_log() returns the console log; it is called only when it is needed."""
     params = parameters(build)
     if build.get('building'):
         return RUNNING
     if not params.get('GIT_COMMIT_FULL'):
         return NO_PARAMS
-    if not COMMIT.match(params.get('GIT_COMMIT_FULL') or '') or not DIGEST.match(params.get('IMAGE_DIGEST') or ''):
-        return INVALID_PARAMS
     result = build.get('result')
     if not stages:
         # No stage data: decide from the result of the build alone.
@@ -216,11 +223,13 @@ def classify(build, stages, outcome_of_failed_production):
         return RELEASED
     if production in ('FAILED', 'UNSTABLE', 'ABORTED'):
         # The production stage started; only its log tells whether production was changed.
-        outcome = outcome_of_failed_production()
+        outcome = rollback_outcome(read_log())
         if outcome == ROLLED_BACK and is_test(params):
             return TEST_ROLLBACK
         return outcome
     # The production stage did not run (NOT_EXECUTED or missing): production was not touched.
+    if stage_status(stages, 'Staging') == 'FAILED' and any(m in read_log() for m in INVALID_PARAMETER_MESSAGES):
+        return INVALID_PARAMS
     if approval in ('FAILED', 'ABORTED', 'NOT_EXECUTED') and stage_status(stages, 'Staging') == 'SUCCESS':
         return NOT_APPROVED
     return STOPPED_EARLY
@@ -244,7 +253,7 @@ def collect(base, component, job, since_ms):
         if build['timestamp'] < since_ms:
             continue
         stages = fetch_stages(base, job, build['number']) if not build.get('building') else {}
-        kind = classify(build, stages, lambda: rollback_outcome(base, job, build['number']))
+        kind = classify(build, stages, cached_log(base, job, build['number']))
         params = parameters(build)
         end = build['timestamp'] + build['duration']
         committed = commit_time(params.get('GIT_COMMIT_FULL'))
