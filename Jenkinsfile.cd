@@ -16,6 +16,8 @@ pipeline {
 
     options {
         disableConcurrentBuilds()
+        // Time of every log line, so the course of a release (and of a rollback) can be read afterwards.
+        timestamps()
         timeout(time: 90, unit: 'MINUTES')
         // The builds are the release history (each keeps its release record), so keep many of them.
         buildDiscarder(logRotator(numToKeepStr: '100', artifactNumToKeepStr: '100'))
@@ -163,9 +165,11 @@ pipeline {
                                         sh "./mvnw test -Dtest=StagingSmokeTest -DexcludedGroups=never -Dstaging.url=${env.PROXY_URL} -Dstaging.expectedRevision=${env.COMMIT_FULL}"
                                     }
                                 } catch (e) {
+                                    def detectedAt = render.detectionTime()
                                     echo "Verification after the switch failed (${e.getMessage()}). Rolling back to ${env.ACTIVE_HOST}"
                                     render.setUpstream(env.ACTIVE_HOST)
                                     render.verifyServedBy(env.ACTIVE_HOST)
+                                    render.recordRestore(detectedAt, params.TEST_ROLLBACK)
                                     error "Release rolled back to ${env.ACTIVE_HOST}: ${e.getMessage()}"
                                 }
 

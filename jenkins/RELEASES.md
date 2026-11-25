@@ -41,3 +41,13 @@ delivered, and a rollback is started with the number of the build to go back to
 The records were first kept as JSON files on a git branch (`releases`), written with a deploy key. That was
 replaced by the records in the Jenkins builds, which is the usual Jenkins practice and needs no extra secret;
 the branch, its deploy key and its host key file were removed on 2026-11-14.
+
+## Restore events
+
+An automatic rollback after a failed check on production (the catch block of the production stage of
+`Jenkinsfile.cd`, `Jenkinsfile.cd.ui` and `Jenkinsfile.cd.proxy`) archives one more file with its build,
+`restore-event-<component>.json`: `commit`, `detectedAt` (UTC, when the check failed), `restoredAt` (UTC, when
+the previous version served again, after its verification), `testRollback` and `buildUrl`. It is not a release
+record and no rollback reads it; the delivery metrics (`jenkins/dora.py`) read it as the time to restore.
+A rollback that did not restore the previous version writes no event, and a failure to write it is only
+reported in the log.

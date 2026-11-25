@@ -6,6 +6,10 @@
 //   entry <commit> <digest> <deployedAt> <buildUrl> [action]   print one record (validated);
 //                                                              action is release (default) or rollback
 //   get   <file> <commit|digest>                               print one field of a record (validated)
+//   restore <commit> <detectedAt> <restoredAt> <buildUrl> <test>  print one restore event (validated):
+//                                                              an automatic rollback, from the failed check
+//                                                              to the previous version serving again;
+//                                                              test is true for a deliberate rollback
 'use strict';
 const fs = require('fs');
 
@@ -43,6 +47,16 @@ if (command === 'entry') {
     fail(`cannot read ${file}: ${e.message}`);
   }
   process.stdout.write(validate(record)[field] + '\n');
+} else if (command === 'restore') {
+  const [commit, detectedAt, restoredAt, buildUrl, test] = args;
+  if (!COMMIT.test(commit || '')) fail('commit must be a full 40-character hash');
+  if (!TIME.test(detectedAt || '') || !TIME.test(restoredAt || '')) {
+    fail('detectedAt and restoredAt must look like 2026-11-13T18:30:00Z');
+  }
+  if (restoredAt < detectedAt) fail('restoredAt must not be earlier than detectedAt');
+  if (!['true', 'false'].includes(test)) fail('test must be true or false');
+  const event = { commit, detectedAt, restoredAt, testRollback: test === 'true', buildUrl: buildUrl || '' };
+  process.stdout.write(JSON.stringify(event, null, 2) + '\n');
 } else {
-  fail('usage: entry|get (see the comment at the top of the file)');
+  fail('usage: entry|get|restore (see the comment at the top of the file)');
 }

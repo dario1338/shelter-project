@@ -20,6 +20,8 @@ pipeline {
 
     options {
         disableConcurrentBuilds()
+        // Time of every log line, so the course of a release (and of a rollback) can be read afterwards.
+        timestamps()
         timeout(time: 90, unit: 'MINUTES')
         // The builds are the release history (each keeps its release record), so keep many of them.
         buildDiscarder(logRotator(numToKeepStr: '100', artifactNumToKeepStr: '100'))
@@ -154,6 +156,7 @@ pipeline {
                                 error 'TEST_ROLLBACK is set: simulated failure after the production deploy'
                             }
                         } catch (e) {
+                            def detectedAt = render.detectionTime()
                             echo "Verification failed (${e.getMessage()}). Restoring the previous state."
                             if (previousUpstream != env.PROD_HOST && render.proxyEnvVar(env.UPSTREAM_KEY) != previousUpstream) {
                                 render.setUpstream(previousUpstream)
@@ -164,6 +167,7 @@ pipeline {
                                 render.waitForDeploy(env.PROD_ID, deployId)
                                 render.verifyRevision(env.PROD_URL, previousRevision)
                                 echo "Production UI restored to ${previousImage}"
+                                render.recordRestore(detectedAt, params.TEST_ROLLBACK)
                             } else {
                                 echo 'WARNING: the previous UI version is unknown (it predates version.json), so the image was not restored.'
                             }

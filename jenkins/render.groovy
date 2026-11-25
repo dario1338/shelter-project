@@ -115,6 +115,27 @@ def recordFile() {
     return "release-record-${componentName()}.json"
 }
 
+// Restore event of an automatic rollback, read by the delivery metrics (jenkins/dora.py).
+def restoreFile() {
+    return "restore-event-${componentName()}.json"
+}
+
+// Current time in UTC, in the format of the records.
+def utcNow() {
+    return sh(returnStdout: true, script: 'date -u +%Y-%m-%dT%H:%M:%SZ').trim()
+}
+
+// The same for the start of a rollback: returns '' instead of failing, because the rollback must go on
+// even if the time cannot be read.
+def detectionTime() {
+    try {
+        return utcNow()
+    } catch (e) {
+        echo "WARNING: the time of the failed check could not be read: ${e.getMessage()}"
+        return ''
+    }
+}
+
 // Delivery job (the build history that holds the releases) and rollback job of the current component.
 def deliveryJob() {
     return ['shelter-api': '/shelter-cd', 'shelter-ui': '/shelter-cd-ui', 'shelter-proxy': '/shelter-cd-proxy'][componentName()]
@@ -184,7 +205,7 @@ def recordRelease(String commit, String digest, String action = 'release') {
         return
     }
     try {
-        def stamp = sh(returnStdout: true, script: 'date -u +%Y-%m-%dT%H:%M:%SZ').trim()
+        def stamp = utcNow()
         def file = recordFile()
         withEnv(["REC_COMMIT=${commit}", "REC_DIGEST=${digest}", "REC_TIME=${stamp}", "REC_URL=${env.BUILD_URL}", "REC_FILE=${file}", "REC_ACTION=${action}"]) {
             sh 'node jenkins/release-record.js entry "$REC_COMMIT" "$REC_DIGEST" "$REC_TIME" "$REC_URL" "$REC_ACTION" > "$REC_FILE"'
@@ -194,6 +215,29 @@ def recordRelease(String commit, String digest, String action = 'release') {
     } catch (e) {
         echo "WARNING: the ${action} is live but could not be recorded: ${e.getMessage()}"
         unstable("The ${action} is live, but its record could not be archived")
+    }
+}
+
+// Records an automatic rollback that restored production: when the failed check was detected
+// (detectedAt, taken at the start of the catch block) and when the previous version served again (now).
+// The time between them is the time to restore of the delivery metrics. A failure to record is only
+// reported: it must not hide the rollback itself.
+def recordRestore(String detectedAt, boolean testRollback) {
+    if (!detectedAt) {
+        echo 'WARNING: the time of the failed check is unknown, so the restore is not recorded.'
+        return
+    }
+    try {
+        def restoredAt = utcNow()
+        def file = restoreFile()
+        withEnv(["REC_COMMIT=${env.COMMIT_FULL}", "REC_DETECTED=${detectedAt}", "REC_RESTORED=${restoredAt}",
+                 "REC_URL=${env.BUILD_URL}", "REC_TEST=${testRollback}", "REC_FILE=${file}"]) {
+            sh 'node jenkins/release-record.js restore "$REC_COMMIT" "$REC_DETECTED" "$REC_RESTORED" "$REC_URL" "$REC_TEST" > "$REC_FILE"'
+        }
+        archiveArtifacts artifacts: file
+        echo "Recorded the restore: failure detected ${detectedAt}, previous version serving again ${restoredAt}"
+    } catch (e) {
+        echo "WARNING: production was restored, but the restore could not be recorded: ${e.getMessage()}"
     }
 }
 
