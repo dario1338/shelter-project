@@ -36,6 +36,7 @@ deliveries.each { d ->
         parameters {
             stringParam('GIT_COMMIT_FULL', '', 'Full commit hash (40 characters) of the image to deliver')
             stringParam('IMAGE_DIGEST', '', 'Digest (sha256:...) of the image built and signed by CI. Set by CI; required, so only a signed image can be delivered')
+            stringParam('TESTS_COMMIT', '', 'OPTIONAL: commit of main whose tests (smoke and end-to-end) check the image. Empty: the commit of the image. Set it only to check an image that was already built with newer tests')
             booleanParam('TEST_ROLLBACK', false, 'TEST ONLY: fail the verification right after the traffic switch, to demonstrate the automatic rollback')
         }
         definition {
@@ -81,10 +82,13 @@ rollbacks.each { r ->
     }
 }
 
-// CI: branches and pull requests of the repository (Jenkinsfile.ci).
-// Only branches and pull requests from this repository are built. Pull requests from
-// forks are deliberately NOT discovered: the agent has access to the Docker socket,
-// so building code from a stranger's fork would let it run commands on the server.
+// CI: main and the pull requests of the repository (Jenkinsfile.ci).
+// Only main and pull requests from this repository are built. A branch without a pull request
+// is not built: its first build had no earlier build to compare with, so it built every
+// component and checked no migration, and the pull request then built the same commit again.
+// A pull request (a draft one for early feedback) always compares with its target branch.
+// Pull requests from forks are deliberately NOT discovered: the agent has access to the Docker
+// socket, so building code from a stranger's fork would let it run commands on the server.
 multibranchPipelineJob('shelter-project') {
     branchSources {
         branchSource {
@@ -99,6 +103,10 @@ multibranchPipelineJob('shelter-project') {
                     traits {
                         gitHubBranchDiscovery { strategyId(1) }
                         gitHubPullRequestDiscovery { strategyId(2) }
+                        headWildcardFilter {
+                            includes('main PR-*')
+                            excludes('')
+                        }
                     }
                 }
             }

@@ -1,5 +1,7 @@
 // Shared helpers of the delivery and rollback pipelines of the API, the UI and the proxy
 // (Jenkinsfile.cd*, Jenkinsfile.rollback*). Loaded with `load 'jenkins/render.groovy'`; call init() once after loading.
+// The pipeline code itself (Jenkinsfiles, this file, release-record.js) comes from the top of main; the tests
+// that check an image come from a named commit, see resolveTestsRevision() and prepareTests().
 // All functions expect RENDER_KEY to be bound by the caller (withCredentials), except serviceEnvVar(),
 // proxyEnvVar(), resolveInstances(), smokeProxy() and e2e(), which bind it themselves.
 
@@ -207,8 +209,10 @@ def recordRelease(String commit, String digest, String action = 'release') {
     try {
         def stamp = utcNow()
         def file = recordFile()
-        withEnv(["REC_COMMIT=${commit}", "REC_DIGEST=${digest}", "REC_TIME=${stamp}", "REC_URL=${env.BUILD_URL}", "REC_FILE=${file}", "REC_ACTION=${action}"]) {
-            sh 'node jenkins/release-record.js entry "$REC_COMMIT" "$REC_DIGEST" "$REC_TIME" "$REC_URL" "$REC_ACTION" > "$REC_FILE"'
+        // The commit of the tests that checked this version ('' when no test code ran, as in the UI rollback).
+        withEnv(["REC_COMMIT=${commit}", "REC_DIGEST=${digest}", "REC_TIME=${stamp}", "REC_URL=${env.BUILD_URL}", "REC_FILE=${file}",
+                 "REC_ACTION=${action}", "REC_TESTS=${env.TESTS_REVISION ?: ''}"]) {
+            sh 'node jenkins/release-record.js entry "$REC_COMMIT" "$REC_DIGEST" "$REC_TIME" "$REC_URL" "$REC_ACTION" "$REC_TESTS" > "$REC_FILE"'
         }
         archiveArtifacts artifacts: file, fingerprint: true
         echo "Recorded ${componentName()} ${action} ${commit.take(7)} (${digest}) with build #${env.BUILD_NUMBER}"
@@ -490,7 +494,47 @@ def smokeProxy(String baseUrl, String proxyServiceId) {
     echo "Proxy smoke tests passed for ${baseUrl}"
 }
 
-// End-to-end tests (folder e2e/, Playwright): a real browser goes through the whole staging application,
+// Which commit the tests of this build come from (the smoke tests of the API and the end-to-end tests).
+// By default the commit of the image: an image is checked by the tests that belong to it. TESTS_COMMIT names
+// another commit only to check an image that was already built with newer tests (for example after a fix of a
+// test alone, which builds no image); the build and its release record then say which tests checked it.
+// Only a commit of main is accepted: the tests that run against staging and production must have been merged.
+def resolveTestsRevision(String imageCommit, String requested) {
+    def tests = (requested ?: '').trim() ?: imageCommit
+    if (!(tests ==~ /^[0-9a-f]{40}$/)) {
+        error "TESTS_COMMIT must be empty or a full 40-character hash, got: '${tests}'"
+    }
+    withEnv(["TESTS_REV=${tests}"]) {
+        if (sh(returnStatus: true, script: 'git merge-base --is-ancestor "$TESTS_REV" HEAD') != 0) {
+            error "The tests commit ${tests} is not a commit of main"
+        }
+    }
+    env.TESTS_REVISION = tests
+    if (tests == imageCommit) {
+        echo "Tests come from the commit of the image (${tests.take(7)})"
+    } else {
+        echo "Tests come from ${tests.take(7)} (TESTS_COMMIT), not from the commit of the image (${imageCommit.take(7)})"
+        currentBuild.description = "tests from ${tests.take(7)}"
+    }
+}
+
+// Puts the tests of env.TESTS_REVISION (the folders e2e and shelter-api) into tests-rev/ of the workspace.
+// Called in every workspace that runs tests, after checkout scm.
+def prepareTests() {
+    if (!env.TESTS_REVISION) {
+        error 'prepareTests() needs env.TESTS_REVISION (resolveTestsRevision() or a known revision)'
+    }
+    withEnv(["TESTS_REV=${env.TESTS_REVISION}"]) {
+        sh '''
+            rm -rf tests-rev
+            mkdir tests-rev
+            git archive "$TESTS_REV" e2e shelter-api | tar -x -C tests-rev
+        '''
+    }
+    echo "Tests of ${env.TESTS_REVISION.take(7)} prepared in tests-rev/"
+}
+
+// End-to-end tests (folder e2e/ of the tests revision, see prepareTests(); Playwright): a real browser goes through the whole staging application,
 // through the staging proxy, so what is tried is the path a user takes. They run in the official Playwright
 // image, started by "docker run" like the other containers of the pipeline; nothing is installed on the agent.
 // The agent is itself a container that uses the Docker of the host, so a mounted folder would point to the host,
@@ -498,6 +542,9 @@ def smokeProxy(String baseUrl, String proxyServiceId) {
 // "docker cp" and kept as an artifact of the build (the HTML report, with traces and screenshots of failures).
 // The sleeping services are woken first: the proxy does not wake the API and the UI behind it.
 def e2e() {
+    if (!fileExists('tests-rev/e2e/Dockerfile')) {
+        error 'The end-to-end tests are missing: call prepareTests() first'
+    }
     wakeHost(env.STAGING_PROXY_URL.replace('https://', ''), '/proxy-health')
     wakeUpstreams(env.STAGING_PROXY_ID)
     def suffix = env.BUILD_TAG.toLowerCase().replaceAll('[^a-z0-9_.-]', '-')
@@ -514,7 +561,7 @@ def e2e() {
                                                   usernameVariable: 'E2E_ADMIN_EMAIL',
                                                   passwordVariable: 'E2E_ADMIN_PASSWORD')]) {
                     sh '''
-                        docker build -t "$E2E_IMAGE" e2e
+                        docker build -t "$E2E_IMAGE" tests-rev/e2e
                         docker rm -f "$E2E_CONTAINER" >/dev/null 2>&1 || true
                         status=0
                         docker run --name "$E2E_CONTAINER" --init --ipc=host \

@@ -3,8 +3,11 @@
 // (archiveArtifacts); a rollback copies it from the build it is asked to go back to (copyArtifacts).
 // Used by jenkins/render.groovy. Kept as a script (not Groovy) so it can be run and tested outside Jenkins.
 //
-//   entry <commit> <digest> <deployedAt> <buildUrl> [action]   print one record (validated);
-//                                                              action is release (default) or rollback
+//   entry <commit> <digest> <deployedAt> <buildUrl> [action] [testsCommit]
+//                                                              print one record (validated);
+//                                                              action is release (default) or rollback;
+//                                                              testsCommit is the commit of the tests that
+//                                                              checked it (left out when empty)
 //   get   <file> <commit|digest>                               print one field of a record (validated)
 //   restore <commit> <detectedAt> <restoredAt> <buildUrl> <test>  print one restore event (validated):
 //                                                              an automatic rollback, from the failed check
@@ -28,14 +31,20 @@ function validate(record) {
   if (!DIGEST.test(record.digest || '')) fail('digest must look like sha256:<64 hex characters>');
   if (!TIME.test(record.deployedAt || '')) fail('deployedAt must look like 2026-11-13T18:30:00Z');
   if (!ACTIONS.includes(record.action)) fail('action must be release or rollback');
+  // Records written before 2026-11-26 have no testsCommit; when it is there, it must be a full hash.
+  if (record.testsCommit !== undefined && !COMMIT.test(record.testsCommit)) {
+    fail('testsCommit must be a full 40-character hash');
+  }
   return record;
 }
 
 const [command, ...args] = process.argv.slice(2);
 
 if (command === 'entry') {
-  const [commit, digest, deployedAt, buildUrl, action = 'release'] = args;
-  const record = validate({ commit, digest, deployedAt, action, buildUrl: buildUrl || '' });
+  const [commit, digest, deployedAt, buildUrl, action = 'release', testsCommit = ''] = args;
+  const record = { commit, digest, deployedAt, action, buildUrl: buildUrl || '' };
+  if (testsCommit) record.testsCommit = testsCommit;
+  validate(record);
   process.stdout.write(JSON.stringify(record, null, 2) + '\n');
 } else if (command === 'get') {
   const [file, field] = args;
