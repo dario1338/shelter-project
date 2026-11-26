@@ -130,6 +130,12 @@ pipeline {
                         }
                         if (!revision) {
                             echo 'WARNING: the target version does not report a revision (no /api/info). Only health and routing will be verified.'
+                        } else {
+                            // The smoke tests of the version that goes back, not those of the top of main
+                            // (a newer test may check something the older version does not have).
+                            // Prepared before the switch, so that a missing commit stops the rollback before it changes traffic.
+                            env.TESTS_REVISION = revision
+                            render.prepareTests()
                         }
 
                         try {
@@ -137,7 +143,7 @@ pipeline {
                             render.verifyServedBy(env.IDLE_HOST)
                             if (revision) {
                                 render.verifyThroughProxy(env.IDLE_HOST, revision)
-                                dir('shelter-api') {
+                                dir('tests-rev/shelter-api') {
                                     sh "./mvnw test -Dtest=StagingSmokeTest -DexcludedGroups=never -Dstaging.url=${env.PROXY_URL} -Dstaging.expectedRevision=${revision}"
                                 }
                             }

@@ -7,7 +7,7 @@ that build's record and deploys it, so it never relies on an image tag that can 
 | What | Where |
 |---|---|
 | Record | `release-record-<component>.json`, archived by the build (`archiveArtifacts`, with fingerprint) |
-| Fields | `commit` (40 characters), `digest` (`sha256:...`), `deployedAt` (UTC), `action` (`release` or `rollback`), `buildUrl` |
+| Fields | `commit` (40 characters), `digest` (`sha256:...`), `deployedAt` (UTC), `action` (`release` or `rollback`), `buildUrl`, `testsCommit` (commit of the tests that checked the version; records before 2026-11-26 and UI and proxy rollbacks, which run no test code, have none) |
 | Written by | the delivery jobs `shelter-cd`, `shelter-cd-ui`, `shelter-cd-proxy` after the production release and its verification; the rollback jobs after a successful rollback |
 | Read by | the rollback jobs (`TARGET_BUILD` = number of a delivery build, copied with `copyArtifacts`) and the automatic restore after a failed release or rollback (last successful build of the delivery or rollback job) |
 | Code | `jenkins/render.groovy` (`recordRelease`, `releaseFromBuild`, `imageForRevision`), `jenkins/release-record.js` |
@@ -15,6 +15,16 @@ that build's record and deploys it, so it never relies on an image tag that can 
 The delivery builds are named `#<number> <7-character commit>`, so the build list shows which version each one
 delivered, and a rollback is started with the number of the build to go back to
 (`shelter-rollback-proxy`, `TARGET_BUILD` = `7`).
+
+## Revision of the tests
+
+The pipeline code (Jenkinsfiles, `render.groovy`, `release-record.js`) comes from the top of `main`. The tests that
+check an image (`StagingSmokeTest` of the API and the end-to-end tests in `e2e/`) come from the commit of the image,
+extracted into `tests-rev/` of the workspace, so a release is checked by the tests that belong to it. To check an
+image that was already built with newer tests (a fix of a test alone builds no image), start the delivery by hand
+with the same `GIT_COMMIT_FULL` and `IMAGE_DIGEST` and with `TESTS_COMMIT` = the commit of `main` with those tests;
+the build description and the release record then name that commit. The API rollback runs the smoke tests of the
+version it goes back to.
 
 ## Rules and limits
 

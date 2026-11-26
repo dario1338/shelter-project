@@ -14,6 +14,8 @@ pipeline {
                description: 'Full commit hash (40 characters) of the UI image to deliver')
         string(name: 'IMAGE_DIGEST', defaultValue: '',
                description: 'Digest (sha256:...) of the image built and signed by CI. Set by CI; required, so only a signed image can be delivered')
+        string(name: 'TESTS_COMMIT', defaultValue: '',
+               description: 'OPTIONAL: commit of main whose tests (smoke and end-to-end) check the image. Empty: the commit of the image. Set it only to check an image that was already built with newer tests')
         booleanParam(name: 'TEST_ROLLBACK', defaultValue: false,
                description: 'TEST ONLY: fail the verification right after the production deploy, to demonstrate the automatic rollback')
     }
@@ -63,6 +65,8 @@ pipeline {
                             env.RELEASE_DIGEST = digest
                             // Deliver only what CI signed: a digest alone says what the content is, the signature says that our CI pushed it.
                             render.verifySignature(env.IMAGE_URL)
+                            render.resolveTestsRevision(commit, params.TESTS_COMMIT)
+                            render.prepareTests()
                             // The build list then shows which version each build delivers (rollbacks pick a build from it)
                             currentBuild.displayName = "#${env.BUILD_NUMBER} ${commit.take(7)}"
                             echo "Delivering image ${env.IMAGE_URL}"
