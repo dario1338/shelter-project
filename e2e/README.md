@@ -12,12 +12,17 @@ approval, so a release that breaks a user flow stops before production.
 | `tests/browse.spec.ts` | a visitor opens the home page, the list of dogs and, if there is a dog, its page | no |
 | `tests/account.spec.ts` | a new user registers, signs out and signs in again | one user per run |
 | `tests/admin-dogs.spec.ts` | the administrator adds a dog, a visitor who is not signed in opens its page, the administrator deletes it | a dog, deleted at the end (also when the test fails) |
+| `tests/visits.spec.ts` | a new user books a visit to the first dog at a time of its own (one to twelve months ahead), finds it among their visits and cancels it | one user per run; the visit is cancelled at the end (also when a check fails after the booking) |
 
 The tests are few on purpose: the unit, integration and acceptance tests of the API and the UI cover the details,
 and a browser test is slow and can fail for reasons that are not a defect. These cover the flows whose failure a user
 notices first.
 
 ## How it runs
+
+The tests come from the same commit as the image being delivered (`jenkins/RELEASES.md`, *Revision of the tests*),
+so a change of this folder is a new release candidate of all three components: CI builds their images for that
+commit and each delivery runs these tests with them.
 
 The pipeline builds the image from this folder (`Dockerfile`, based on the official Playwright image, which
 has the browsers) and starts it with `docker run`. The report (HTML, with traces and screenshots of failed
