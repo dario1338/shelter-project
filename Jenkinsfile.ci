@@ -14,7 +14,19 @@
 // them already has a fix available (--ignore-unfixed). A finding that is consciously accepted goes
 // into .trivyignore with a reason, instead of lowering the gate.
 def trivyScan(String image) {
-    sh "trivy image --no-progress --timeout 15m --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 ${image}"
+    withTrivyCache {
+        sh "trivy image --no-progress --timeout 15m --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 ${image}"
+    }
+}
+
+// Every Trivy run of this agent uses the same cache (~/.cache/trivy), whose database allows one process at a
+// time: when two builds scanned at once, the second failed with "cache may be in use by another process"
+// (PR-137 #1, 26. 11. 2026). Trivy runs therefore take the lock 'trivy-cache' (Lockable Resources, as the
+// production lock of the delivery jobs), only around the Trivy command, so the rest of a build is not held back.
+def withTrivyCache(Closure body) {
+    lock('trivy-cache') {
+        body()
+    }
 }
 
 // Pushes an image and returns its registry digest (sha256:...). The digest is the identity of the
@@ -71,7 +83,9 @@ def publishImage(String image, String name) {
 def writeSbom(String image, String name) {
     def file = "sbom/${name}.cdx.json"
     dir(env.WORKSPACE) {
-        sh "mkdir -p sbom && trivy image --no-progress --timeout 15m --format cyclonedx --output ${file} ${image}"
+        withTrivyCache {
+            sh "mkdir -p sbom && trivy image --no-progress --timeout 15m --format cyclonedx --output ${file} ${image}"
+        }
         sh "grep -Eq '\"bomFormat\" *: *\"CycloneDX\"' ${file}"
         archiveArtifacts artifacts: file, fingerprint: true
     }
