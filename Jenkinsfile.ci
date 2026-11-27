@@ -92,6 +92,9 @@ def checkImageTag(String repository) {
 //    (this file, jenkins/) selects every component, so the change is verified on all of them.
 //  - Branch build (main): files changed since the last successful build of this branch, so a failed
 //    build never hides changes. Pipeline files are ignored: they were verified in the pull request.
+//  - Both: a change of the shared end-to-end tests (e2e/) selects every component. Every delivery runs
+//    those tests with the commit of its image, so a commit that changes them is a new release candidate
+//    of all three components: built, checked and delivered like a change of their code.
 // Anything that cannot be determined (no previous build, git failure) selects every component, so a
 // check is never skipped by mistake. Branch names and hashes are read from the environment inside
 // the shell script, never interpolated into it.
@@ -117,6 +120,9 @@ def detectChangedComponents() {
     def changed = [api: false, ui: false, proxy: false]
     for (String file : readFile('.changed-files').readLines()) {
         if (pullRequest && (file == 'Jenkinsfile.ci' || file.startsWith('jenkins/'))) {
+            return everything
+        } else if (file.startsWith('e2e/')) {
+            echo "The end-to-end tests changed (${file}): every component is a new release candidate."
             return everything
         } else if (file.startsWith('shelter-api/')) {
             changed.api = true
