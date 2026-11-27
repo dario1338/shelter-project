@@ -20,10 +20,12 @@ delivered, and a rollback is started with the number of the build to go back to
 
 The pipeline code (Jenkinsfiles, `render.groovy`, `release-record.js`) comes from the top of `main`. The tests that
 check an image (`StagingSmokeTest` of the API and the end-to-end tests in `e2e/`) come from the commit of the image,
-extracted into `tests-rev/` of the workspace, so a release is checked by the tests that belong to it. To check an
-image that was already built with newer tests (a fix of a test alone builds no image), start the delivery by hand
-with the same `GIT_COMMIT_FULL` and `IMAGE_DIGEST` and with `TESTS_COMMIT` = the commit of `main` with those tests;
-the build description and the release record then name that commit. The API rollback runs the smoke tests of the
+extracted into `tests-rev/` of the workspace, so a release is checked by the tests that belong to it. A change of
+`e2e/` on `main` is a new release candidate of all three components (`Jenkinsfile.ci`): their images are built for
+that commit and delivered with its tests, like a change of their code. `TESTS_COMMIT` is the exception: to check an
+image that was already built with other tests of `main` without building a new one, start the delivery by hand with
+the same `GIT_COMMIT_FULL` and `IMAGE_DIGEST` and with `TESTS_COMMIT` = that commit; the build description and the
+release record then name it. The API rollback runs the smoke tests of the
 version it goes back to.
 
 ## Rules and limits
