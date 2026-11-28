@@ -1,6 +1,6 @@
 # Base image pinned by version and digest: the same image on every rebuild, and Dependabot can
 # still propose newer versions (9.5.0 is the release the running agent was built from, JDK 21.0.13)
-FROM jenkins/ssh-agent:9.5.0-jdk21@sha256:78ade73b7e8ff8b5b84a016f6a1afc9f98362908bf2f43643a42c599a8f3bd1c
+FROM jenkins/ssh-agent:9.6.0-jdk21@sha256:6504114bb7c1377e6213bb0baf43479e5311467902e6db4d71d8ac58a9d77748
 
 # GID of the host's docker group, passed at build time
 ARG DOCKER_GID
